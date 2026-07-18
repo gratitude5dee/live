@@ -546,10 +546,12 @@ function StagePage() {
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
 
+      setPendingUpload((n) => n + 1);
       const { error: upErr } = await supabase.storage
         .from(bucket)
         .upload(path, blob, { upsert: false });
       if (upErr) {
+        setPendingUpload((n) => Math.max(0, n - 1));
         toast.error(`Upload failed: ${upErr.message}. Local download OK.`);
         return;
       }
@@ -561,6 +563,7 @@ function StagePage() {
         duration_ms: durationMs ?? null,
         size_bytes: blob.size,
       });
+      setPendingUpload((n) => Math.max(0, n - 1));
       toast.success(`${kind === "video" ? "Take" : "Snapshot"} saved`);
     },
     [],
