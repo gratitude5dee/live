@@ -776,12 +776,33 @@ function StagePage() {
             {connState}
             {transport && <span className="text-[#9CA3AF]">· {transport}</span>}
           </span>
-          {liveGesture.label && (
+          {liveGesture.label && hudVisible && (
             <span className="rounded-full bg-[#16161D] px-2.5 py-1 text-xs text-[#E879F9]">
               {liveGesture.label} {liveGesture.score.toFixed(2)}
             </span>
           )}
+          {reactiveOn && hudVisible && (
+            <span className="rounded-full bg-[#E879F9]/20 px-2.5 py-1 text-xs text-[#E879F9]">
+              Reactive Face
+            </span>
+          )}
+          {perfMode && hudVisible && (
+            <span className="rounded-full bg-amber-500/20 px-2.5 py-1 text-xs text-amber-400">
+              Performance mode
+            </span>
+          )}
+          {!facePresent && connState === "live" && hudVisible && (
+            <span className="rounded-full bg-amber-500/20 px-2.5 py-1 text-xs text-amber-400">
+              Step into frame
+            </span>
+          )}
+          {pendingUpload > 0 && (
+            <span className="rounded-full bg-[#16161D] px-2.5 py-1 text-xs text-[#9CA3AF]">
+              ↑ {pendingUpload}
+            </span>
+          )}
         </div>
+
         <div className="flex items-center gap-2">
           <Link
             to="/library"
