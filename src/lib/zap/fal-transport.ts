@@ -41,10 +41,21 @@ export class VideoTransport {
   private outputImg: HTMLImageElement | null = null;
   private outputStreamOut: MediaStream | null = null;
   private closed = false;
+  private outboundPaused = false;
 
   constructor(inputStream: MediaStream, cb: TransportCallbacks) {
     this.inputStream = inputStream;
     this.cb = cb;
+  }
+
+  setOutboundPaused(paused: boolean) {
+    this.outboundPaused = paused;
+    // In WebRTC mode, we can additionally toggle sender enabled state
+    if (this.pc) {
+      for (const sender of this.pc.getSenders()) {
+        if (sender.track) sender.track.enabled = !paused;
+      }
+    }
   }
 
   private rawSend(payload: Record<string, unknown>) {
