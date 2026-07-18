@@ -515,7 +515,7 @@ function StagePage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [prompt, presets, applyPrompt, applyPreset, toggleRecord]);
+  }, [prompt, presets, applyPrompt, applyPreset, toggleRecord, undo]);
 
   // --- Ref image upload ---
   const onRefUpload = async (file: File) => {
