@@ -193,6 +193,7 @@ export class VideoTransport {
     let inFlight = false;
     const tick = () => {
       if (this.closed) return;
+      if (this.outboundPaused) return;
       if (!inFlight && video.readyState >= 2 && this.lastPayload) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
