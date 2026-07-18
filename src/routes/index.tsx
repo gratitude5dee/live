@@ -64,9 +64,15 @@ function StagePage() {
   }>({ label: null, score: 0, hold: 0 });
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reactiveOn, setReactiveOn] = useState(false);
+  const [hudVisible, setHudVisible] = useState(true);
+  const [facePresent, setFacePresent] = useState(true);
+  const [perfMode, setPerfMode] = useState(false);
+  const [pendingUpload, setPendingUpload] = useState(0);
 
   const inputVideoRef = useRef<HTMLVideoElement>(null);
   const outputVideoRef = useRef<HTMLVideoElement>(null);
+  const overlayRef = useRef<HTMLCanvasElement>(null);
   const inputStreamRef = useRef<MediaStream | null>(null);
   const outputStreamRef = useRef<MediaStream | null>(null);
   const transportRef = useRef<VideoTransport | null>(null);
@@ -74,7 +80,10 @@ function StagePage() {
   const chunksRef = useRef<Blob[]>([]);
   const recordStartRef = useRef<number>(0);
   const gestureRef = useRef<GestureRecognizer | null>(null);
+  const faceRef = useRef<FaceLandmarker | null>(null);
   const engineRef = useRef<GestureEngine | null>(null);
+  const faceEngineRef = useRef<FaceEngine | null>(null);
+  const visionBufRef = useRef<VisionBuffer | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const startedAtRef = useRef<number>(0);
   const userIdRef = useRef<string | null>(null);
@@ -82,6 +91,11 @@ function StagePage() {
   const currentPresetIndex = useRef<number>(-1);
   const appliedRef = useRef<PromptState | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const facePresentRef = useRef(true);
+  const reactiveOnRef = useRef(false);
+  const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastGestureResultRef = useRef<GestureRecognizerResult | null>(null);
+  const lastHoldRef = useRef<number>(0);
 
   // --- Anonymous auth on mount ---
   useEffect(() => {
