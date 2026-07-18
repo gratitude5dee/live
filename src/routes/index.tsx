@@ -468,15 +468,6 @@ function StagePage() {
     }, 10 * 60 * 1000);
   }, [recording, uploadTake]);
 
-  // --- Cleanup ---
-  useEffect(() => {
-    const beforeUnload = async () => {
-      if (sessionIdRef.current) {
-        await supabase
-          .from("sessions")
-          .update({ ended_at: new Date().toISOString() })
-          .eq("id", sessionIdRef.current);
-      }
   // Keep appliedRef in sync
   useEffect(() => {
     appliedRef.current = applied;
