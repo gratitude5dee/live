@@ -336,6 +336,16 @@ function StagePage() {
       // QR code for remote
       const remoteUrl = `${window.location.origin}/remote/${session.id}`;
       QRCode.toDataURL(remoteUrl, { margin: 1, width: 240 }).then(setQrDataUrl);
+
+      // Heartbeat to remote (every 3s) with current prompt state
+      const hb = setInterval(() => {
+        channelRef.current?.send({
+          type: "broadcast",
+          event: "heartbeat",
+          payload: { prompt: appliedRef.current?.text ?? null, at: Date.now() },
+        });
+      }, 3000);
+      heartbeatRef.current = hb;
     } catch (e) {
       console.error(e);
       setError(String((e as Error)?.message ?? e));
