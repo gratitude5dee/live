@@ -57,12 +57,12 @@ export class VideoTransport {
       throttleInterval: 0,
       onResult: (result) => this.handleResult(result as FalResult),
       onError: (e) => this.cb.onError(e),
-      // @ts-expect-error tokenProvider is supported at runtime by @fal-ai/client
       tokenProvider: async () => {
         const { token } = await mintFalRealtimeToken({ data: { app: LUCY_APP } });
         return token;
       },
-    });
+    } as Parameters<typeof fal.realtime.connect>[1]) as unknown as FalConnection;
+
 
     // Give WebRTC 8s to produce a remote track, otherwise fall back.
     this.fallbackTimer = window.setTimeout(() => {
