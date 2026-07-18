@@ -505,6 +505,8 @@ function StagePage() {
         if (prompt.trim()) applyPrompt(prompt, "text");
       } else if (e.key === "r" || e.key === "R") {
         toggleRecord();
+      } else if (e.key === "v" || e.key === "V") {
+        undo();
       } else if (/^[0-9]$/.test(e.key)) {
         const idx = e.key === "0" ? 9 : parseInt(e.key, 10) - 1;
         const p = presets[idx];
