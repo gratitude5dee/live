@@ -371,6 +371,11 @@ function StagePage() {
       await ch.subscribe();
       channelRef.current = ch;
 
+      // Vision buffer starts flushing regardless of MediaPipe availability
+      const vb = new VisionBuffer();
+      vb.start();
+      visionBufRef.current = vb;
+
       // Start MediaPipe (best-effort)
       try {
         const rec = await loadGestureRecognizer();
@@ -379,13 +384,33 @@ function StagePage() {
         engine.onFire = (label, action) => {
           handleGesture(label, action);
         };
-        engine.onLiveUpdate = (label, score, hold) =>
+        engine.onLiveUpdate = (label, score, hold) => {
           setLiveGesture({ label, score, hold });
+          lastHoldRef.current = hold;
+        };
         engineRef.current = engine;
-        runInferenceLoop();
       } catch (e) {
-        console.warn("MediaPipe unavailable", e);
+        console.warn("gesture recognizer unavailable", e);
       }
+
+      try {
+        const fl = await loadFaceLandmarker();
+        faceRef.current = fl;
+        const fe = new FaceEngine();
+        fe.onReactive = (action, label, score) =>
+          triggerReactive(action, label, score);
+        fe.onFacePresence = (present) => {
+          facePresentRef.current = present;
+          setFacePresent(present);
+          // Pause outbound frames on no-face; resume on face-back
+          transportRef.current?.setOutboundPaused(!present);
+        };
+        faceEngineRef.current = fe;
+      } catch (e) {
+        console.warn("face landmarker unavailable", e);
+      }
+
+      runInferenceLoop();
 
       // Start fal
       setConnState("connecting");
