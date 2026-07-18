@@ -44,6 +44,11 @@ export class VideoTransport {
     this.cb = cb;
   }
 
+  private rawSend(payload: Record<string, unknown>) {
+    (this.connection as unknown as { send?: (p: unknown) => void } | null)?.send?.(payload);
+  }
+
+
   async start() {
     this.connection = fal.realtime.connect(LUCY_APP, {
       throttleInterval: 0,
