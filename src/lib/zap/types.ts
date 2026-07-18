@@ -32,6 +32,13 @@ export type ConnectionState =
 
 export const LUCY_APP = "decart/lucy-2-5/realtime";
 
+export const REACTIVE_PROMPTS: Record<string, string> = {
+  confetti:
+    "Add colorful confetti falling around the person and bouncing lightly off their shoulders.",
+  sparkle:
+    "Add small glowing golden sparkles floating around the person's head and shoulders, drifting with their movement.",
+};
+
 export type RemoteMessage =
   | { type: "apply"; prompt: string; refImage?: string }
   | { type: "preset"; presetId: number }
