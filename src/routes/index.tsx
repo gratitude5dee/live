@@ -758,6 +758,13 @@ function StagePage() {
               Apply
             </button>
             <button
+              onClick={undo}
+              disabled={!prevApplied}
+              className="rounded-md bg-[#22222D] px-3 py-2 text-xs hover:bg-[#2A2A35] disabled:opacity-40"
+            >
+              Undo
+            </button>
+            <button
               onClick={clearPrompt}
               className="rounded-md bg-[#22222D] px-3 py-2 text-xs hover:bg-[#2A2A35]"
             >
