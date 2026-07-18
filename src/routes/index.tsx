@@ -72,6 +72,8 @@ function StagePage() {
   const userIdRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const currentPresetIndex = useRef<number>(-1);
+  const appliedRef = useRef<PromptState | null>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // --- Anonymous auth on mount ---
   useEffect(() => {
@@ -336,6 +338,16 @@ function StagePage() {
       // QR code for remote
       const remoteUrl = `${window.location.origin}/remote/${session.id}`;
       QRCode.toDataURL(remoteUrl, { margin: 1, width: 240 }).then(setQrDataUrl);
+
+      // Heartbeat to remote (every 3s) with current prompt state
+      const hb = setInterval(() => {
+        channelRef.current?.send({
+          type: "broadcast",
+          event: "heartbeat",
+          payload: { prompt: appliedRef.current?.text ?? null, at: Date.now() },
+        });
+      }, 3000);
+      heartbeatRef.current = hb;
     } catch (e) {
       console.error(e);
       setError(String((e as Error)?.message ?? e));
@@ -456,6 +468,11 @@ function StagePage() {
     }, 10 * 60 * 1000);
   }, [recording, uploadTake]);
 
+  // Keep appliedRef in sync
+  useEffect(() => {
+    appliedRef.current = applied;
+  }, [applied]);
+
   // --- Cleanup ---
   useEffect(() => {
     const beforeUnload = async () => {
@@ -469,6 +486,7 @@ function StagePage() {
     window.addEventListener("beforeunload", beforeUnload);
     return () => {
       window.removeEventListener("beforeunload", beforeUnload);
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       transportRef.current?.close();
       recorderRef.current?.stop();
       gestureRef.current?.close();
@@ -487,6 +505,8 @@ function StagePage() {
         if (prompt.trim()) applyPrompt(prompt, "text");
       } else if (e.key === "r" || e.key === "R") {
         toggleRecord();
+      } else if (e.key === "v" || e.key === "V") {
+        undo();
       } else if (/^[0-9]$/.test(e.key)) {
         const idx = e.key === "0" ? 9 : parseInt(e.key, 10) - 1;
         const p = presets[idx];
@@ -495,7 +515,7 @@ function StagePage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [prompt, presets, applyPrompt, applyPreset, toggleRecord]);
+  }, [prompt, presets, applyPrompt, applyPreset, toggleRecord, undo]);
 
   // --- Ref image upload ---
   const onRefUpload = async (file: File) => {
@@ -736,6 +756,13 @@ function StagePage() {
               className="rounded-md bg-[#22D3EE] px-4 py-2 text-xs font-semibold text-black hover:bg-[#67E8F9]"
             >
               Apply
+            </button>
+            <button
+              onClick={undo}
+              disabled={!prevApplied}
+              className="rounded-md bg-[#22222D] px-3 py-2 text-xs hover:bg-[#2A2A35] disabled:opacity-40"
+            >
+              Undo
             </button>
             <button
               onClick={clearPrompt}

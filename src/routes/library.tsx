@@ -79,9 +79,20 @@ function LibraryPage() {
             ) : (
               <div className="aspect-video bg-black" />
             )}
-            <div className="flex items-center justify-between p-2 text-xs text-[#9CA3AF]">
+            <div className="flex items-center justify-between gap-2 p-2 text-xs text-[#9CA3AF]">
               <span>{t.kind}</span>
-              <span>{new Date(t.created_at).toLocaleString()}</span>
+              <span className="flex-1 truncate">{new Date(t.created_at).toLocaleString()}</span>
+              <button
+                onClick={async () => {
+                  if (!confirm("Delete this take?")) return;
+                  await supabase.storage.from("takes").remove([t.storage_path]);
+                  await supabase.from("takes").delete().eq("id", t.id);
+                  setTakes((prev) => prev.filter((x) => x.id !== t.id));
+                }}
+                className="text-[#F87171] hover:underline"
+              >
+                Delete
+              </button>
             </div>
           </div>
         ))}
