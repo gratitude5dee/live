@@ -871,20 +871,37 @@ function StagePage() {
             )}
 
             {/* PiP */}
-            <div className="absolute right-3 top-3 h-36 w-64 overflow-hidden rounded-lg border border-[#2A2A35] bg-black shadow-lg">
-              <video
-                ref={inputVideoRef}
-                className="h-full w-full -scale-x-100 object-cover"
-                playsInline
-                muted
-              />
-              {liveGesture.label && liveGesture.hold > 0 && (
-                <div
-                  className="absolute inset-x-0 bottom-0 h-1 bg-[#22D3EE]"
-                  style={{ width: `${liveGesture.hold * 100}%` }}
+            {hudVisible && (
+              <div className="absolute right-3 top-3 h-36 w-64 overflow-hidden rounded-lg border border-[#2A2A35] bg-black shadow-lg">
+                <video
+                  ref={inputVideoRef}
+                  className="h-full w-full -scale-x-100 object-cover"
+                  playsInline
+                  muted
                 />
-              )}
-            </div>
+                <canvas
+                  ref={overlayRef}
+                  className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
+                />
+                {!facePresent && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-amber-300">
+                    Step into frame
+                  </div>
+                )}
+                {liveGesture.label && (
+                  <div className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-[#22D3EE]">
+                    {liveGesture.label} · {liveGesture.score.toFixed(2)}
+                  </div>
+                )}
+                {liveGesture.hold > 0 && (
+                  <div
+                    className="absolute inset-x-0 bottom-0 h-1 bg-[#FAFAFA]"
+                    style={{ width: `${liveGesture.hold * 100}%` }}
+                  />
+                )}
+              </div>
+            )}
+
 
             {qrDataUrl && (
               <div className="absolute bottom-3 right-3 rounded-lg bg-white p-1">
