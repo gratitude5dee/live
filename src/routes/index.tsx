@@ -623,40 +623,78 @@ function StagePage() {
     appliedRef.current = applied;
   }, [applied]);
 
-  // --- Cleanup ---
+  // --- Cleanup, tab-hidden pause, un-uploaded warning ---
   useEffect(() => {
-    const beforeUnload = async () => {
-      if (sessionIdRef.current) {
-        await supabase
-          .from("sessions")
-          .update({ ended_at: new Date().toISOString() })
-          .eq("id", sessionIdRef.current);
+    const endSession = async () => {
+      if (!sessionIdRef.current) return;
+      await supabase
+        .from("sessions")
+        .update({
+          ended_at: new Date().toISOString(),
+          stats: {
+            transport,
+            perf_mode: perfMode,
+          },
+        })
+        .eq("id", sessionIdRef.current);
+    };
+
+    let hideTimer: ReturnType<typeof setTimeout> | null = null;
+    const onVisibility = () => {
+      if (document.hidden) {
+        hideTimer = setTimeout(() => {
+          transportRef.current?.setOutboundPaused(true);
+        }, 60_000);
+      } else {
+        if (hideTimer) clearTimeout(hideTimer);
+        hideTimer = null;
+        transportRef.current?.setOutboundPaused(false);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      if (pendingUpload > 0 || recorderRef.current?.state === "recording") {
+        e.preventDefault();
+        e.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", beforeUnload);
+
     return () => {
       window.removeEventListener("beforeunload", beforeUnload);
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (hideTimer) clearTimeout(hideTimer);
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
       transportRef.current?.close();
       recorderRef.current?.stop();
       gestureRef.current?.close();
+      faceRef.current?.close();
+      visionBufRef.current?.stop();
       inputStreamRef.current?.getTracks().forEach((t) => t.stop());
       if (channelRef.current) supabase.removeChannel(channelRef.current);
-      beforeUnload();
+      endSession();
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingUpload, transport, perfMode]);
 
   // --- Keyboard shortcuts ---
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement)?.tagName === "INPUT") return;
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (e.code === "Space") {
         e.preventDefault();
         if (prompt.trim()) applyPrompt(prompt, "text");
       } else if (e.key === "r" || e.key === "R") {
         toggleRecord();
-      } else if (e.key === "v" || e.key === "V") {
+      } else if (e.key === "z" || e.key === "Z") {
         undo();
+      } else if (e.key === "v" || e.key === "V") {
+        setHudVisible((v) => !v); // toggle PiP+HUD chrome
+      } else if (e.key === "h" || e.key === "H") {
+        setHudVisible((v) => !v);
       } else if (/^[0-9]$/.test(e.key)) {
         const idx = e.key === "0" ? 9 : parseInt(e.key, 10) - 1;
         const p = presets[idx];
