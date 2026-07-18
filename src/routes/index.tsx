@@ -72,6 +72,8 @@ function StagePage() {
   const userIdRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const currentPresetIndex = useRef<number>(-1);
+  const appliedRef = useRef<PromptState | null>(null);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // --- Anonymous auth on mount ---
   useEffect(() => {
