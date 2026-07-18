@@ -218,13 +218,62 @@ function StagePage() {
     [applyPrompt, refImage, presets],
   );
 
+  // --- Reactive Face: fire a preset for 4s then auto-revert ---
+  const triggerReactive = useCallback(
+    async (action: FaceAction, label: string, score: number) => {
+      const promptText = REACTIVE_PROMPTS[action];
+      if (!promptText || !transportRef.current) return;
+      // Log as face + reactive
+      const sid = sessionIdRef.current;
+      const uid = userIdRef.current;
+      if (sid && uid) {
+        visionBufRef.current?.push({
+          session_id: sid,
+          user_id: uid,
+          kind: "face",
+          label,
+          score,
+          action,
+          at_ms: at_ms(),
+        });
+        channelRef.current?.send({
+          type: "broadcast",
+          event: "vision",
+          payload: { kind: "face", label, action, at_ms: at_ms() },
+        });
+      }
+      const prev = appliedRef.current;
+      const next: PromptState = { text: promptText };
+      setPrevApplied(prev);
+      setApplied(next);
+      transportRef.current.send({
+        prompt: promptText,
+        enable_prompt_expansion: true,
+      });
+      await logPromptEvent("reactive", "face", next);
+      if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
+      revertTimerRef.current = setTimeout(async () => {
+        // auto-revert to prev applied state
+        if (!transportRef.current) return;
+        setApplied(prev);
+        transportRef.current.send({
+          prompt: prev?.text ?? "",
+          enable_prompt_expansion: !!prev?.text,
+          reference_image_url: prev?.refImage,
+        });
+        await logPromptEvent("apply", "face", prev);
+      }, 4000);
+    },
+    [logPromptEvent],
+  );
+
   // --- Handle a fired gesture ---
   const handleGesture = useCallback(
     async (label: string, action: GestureAction) => {
       const sid = sessionIdRef.current;
       const uid = userIdRef.current;
       if (sid && uid) {
-        await supabase.from("vision_events").insert({
+        visionBufRef.current?.push({
           session_id: sid,
           user_id: uid,
           kind: "gesture",
@@ -258,6 +307,17 @@ function StagePage() {
           break;
         case "snapshot":
           await snapshot();
+          break;
+        case "toggle_reactive": {
+          const on = !reactiveOnRef.current;
+          reactiveOnRef.current = on;
+          setReactiveOn(on);
+          if (faceEngineRef.current) faceEngineRef.current.enabled = on;
+          toast(`Reactive face: ${on ? "on" : "off"}`);
+          break;
+        }
+        case "toggle_hud":
+          setHudVisible((v) => !v);
           break;
         default:
           break;
