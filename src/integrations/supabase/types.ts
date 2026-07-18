@@ -14,7 +14,213 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      presets: {
+        Row: {
+          created_at: string
+          emoji: string
+          id: number
+          name: string
+          prompt: string
+          requires_ref: boolean
+          sort_order: number
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          emoji: string
+          id?: never
+          name: string
+          prompt: string
+          requires_ref?: boolean
+          sort_order?: number
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          emoji?: string
+          id?: never
+          name?: string
+          prompt?: string
+          requires_ref?: boolean
+          sort_order?: number
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      prompt_events: {
+        Row: {
+          at_ms: number
+          created_at: string
+          id: number
+          kind: string
+          prompt: string | null
+          ref_image_path: string | null
+          session_id: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          at_ms: number
+          created_at?: string
+          id?: never
+          kind: string
+          prompt?: string | null
+          ref_image_path?: string | null
+          session_id: string
+          source: string
+          user_id: string
+        }
+        Update: {
+          at_ms?: number
+          created_at?: string
+          id?: never
+          kind?: string
+          prompt?: string | null
+          ref_image_path?: string | null
+          session_id?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "prompt_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sessions: {
+        Row: {
+          ended_at: string | null
+          id: string
+          started_at: string
+          stats: Json
+          transport: string | null
+          user_id: string
+        }
+        Insert: {
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          stats?: Json
+          transport?: string | null
+          user_id: string
+        }
+        Update: {
+          ended_at?: string | null
+          id?: string
+          started_at?: string
+          stats?: Json
+          transport?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      takes: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          id: number
+          kind: string
+          session_id: string
+          size_bytes: number | null
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          id?: never
+          kind: string
+          session_id: string
+          size_bytes?: number | null
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          id?: never
+          kind?: string
+          session_id?: string
+          size_bytes?: number | null
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "takes_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      token_mints: {
+        Row: {
+          id: number
+          minted_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: never
+          minted_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: never
+          minted_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      vision_events: {
+        Row: {
+          action: string | null
+          at_ms: number
+          created_at: string
+          id: number
+          kind: string
+          label: string
+          score: number
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          action?: string | null
+          at_ms: number
+          created_at?: string
+          id?: never
+          kind: string
+          label: string
+          score: number
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          action?: string | null
+          at_ms?: number
+          created_at?: string
+          id?: never
+          kind?: string
+          label?: string
+          score?: number
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vision_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
