@@ -15,6 +15,8 @@ type TransportCallbacks = {
   onError: (e: unknown) => void;
 };
 
+type FalConnection = { send: (p: unknown) => void; close: () => void };
+
 export type TransportSend = (payload: {
   prompt: string;
   enable_prompt_expansion?: boolean;
@@ -25,7 +27,8 @@ export type TransportSend = (payload: {
 export class VideoTransport {
   private inputStream: MediaStream;
   private cb: TransportCallbacks;
-  private connection: ReturnType<typeof fal.realtime.connect> | null = null;
+  private connection: FalConnection | null = null;
+
   private pc: RTCPeerConnection | null = null;
   private mode: "webrtc" | "frame" | null = null;
   private fallbackTimer: number | null = null;
