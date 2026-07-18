@@ -477,10 +477,25 @@ function StagePage() {
           .update({ ended_at: new Date().toISOString() })
           .eq("id", sessionIdRef.current);
       }
+  // Keep appliedRef in sync
+  useEffect(() => {
+    appliedRef.current = applied;
+  }, [applied]);
+
+  // --- Cleanup ---
+  useEffect(() => {
+    const beforeUnload = async () => {
+      if (sessionIdRef.current) {
+        await supabase
+          .from("sessions")
+          .update({ ended_at: new Date().toISOString() })
+          .eq("id", sessionIdRef.current);
+      }
     };
     window.addEventListener("beforeunload", beforeUnload);
     return () => {
       window.removeEventListener("beforeunload", beforeUnload);
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       transportRef.current?.close();
       recorderRef.current?.stop();
       gestureRef.current?.close();
