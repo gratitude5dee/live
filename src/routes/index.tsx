@@ -462,24 +462,64 @@ function StagePage() {
     }
   }, [applyPrompt, applyPreset, clearPrompt, handleGesture, presets, undo]);
 
-  // --- MediaPipe inference loop ---
+  // --- MediaPipe inference loop (single rAF, both engines, adaptive rate) ---
   const runInferenceLoop = useCallback(() => {
     let frame = 0;
+    let slowStreak = 0;
+    let everyN = 2;
+    let last = performance.now();
     const loop = () => {
-      if (!gestureRef.current || !inputVideoRef.current || !engineRef.current) {
+      if (!inputVideoRef.current) {
         requestAnimationFrame(loop);
         return;
       }
       frame++;
-      if (frame % 2 === 0 && inputVideoRef.current.readyState >= 2) {
+      const now = performance.now();
+      const dt = now - last;
+      last = now;
+      if (dt > 33) {
+        slowStreak++;
+        if (slowStreak > 60 && everyN === 2) {
+          everyN = 3;
+          setPerfMode(true);
+        }
+      } else if (slowStreak > 0) {
+        slowStreak = Math.max(0, slowStreak - 1);
+      }
+
+      if (frame % everyN === 0 && inputVideoRef.current.readyState >= 2) {
+        const ts = performance.now();
         try {
-          const result = gestureRef.current.recognizeForVideo(
-            inputVideoRef.current,
-            performance.now(),
-          );
-          engineRef.current.ingest(result);
+          if (gestureRef.current && engineRef.current) {
+            const result = gestureRef.current.recognizeForVideo(
+              inputVideoRef.current,
+              ts,
+            );
+            engineRef.current.ingest(result);
+            lastGestureResultRef.current = result;
+          }
         } catch (e) {
           console.warn("gesture inference error", e);
+        }
+        try {
+          if (faceRef.current && faceEngineRef.current) {
+            const fr = faceRef.current.detectForVideo(inputVideoRef.current, ts + 0.1);
+            faceEngineRef.current.ingest(fr);
+          }
+        } catch (e) {
+          console.warn("face inference error", e);
+        }
+
+        // Paint hand overlay onto PiP overlay canvas
+        const oc = overlayRef.current;
+        if (oc) {
+          const v = inputVideoRef.current;
+          const w = v.videoWidth || 640;
+          const h = v.videoHeight || 360;
+          if (oc.width !== w) oc.width = w;
+          if (oc.height !== h) oc.height = h;
+          const ctx = oc.getContext("2d");
+          if (ctx) drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
         }
       }
       requestAnimationFrame(loop);
