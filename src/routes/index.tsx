@@ -1,18 +1,26 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
 import { supabase } from "@/integrations/supabase/client";
 import { VideoTransport } from "@/lib/zap/fal-transport";
 import { GestureEngine, type GestureAction } from "@/lib/zap/gesture-engine";
-import { loadGestureRecognizer } from "@/lib/zap/mediapipe";
-import type {
-  ConnectionState,
-  Preset,
-  PromptState,
-  RemoteMessage,
+import { FaceEngine, type FaceAction } from "@/lib/zap/face-engine";
+import { VisionBuffer } from "@/lib/zap/vision-buffer";
+import { drawHandOverlay } from "@/lib/zap/overlay";
+import { loadGestureRecognizer, loadFaceLandmarker } from "@/lib/zap/mediapipe";
+import {
+  REACTIVE_PROMPTS,
+  type ConnectionState,
+  type Preset,
+  type PromptState,
+  type RemoteMessage,
 } from "@/lib/zap/types";
-import type { GestureRecognizer } from "@mediapipe/tasks-vision";
+import type {
+  FaceLandmarker,
+  GestureRecognizer,
+  GestureRecognizerResult,
+} from "@mediapipe/tasks-vision";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export const Route = createFileRoute("/")({
