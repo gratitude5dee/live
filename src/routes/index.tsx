@@ -1352,6 +1352,12 @@ function StagePage() {
     toggleRecord,
     stopSession: (r?: "manual" | "timeout") => void stopSession(r),
     onRefUpload,
+    clearRefImage,
+    bakeLandmarks,
+    toggleBakeLandmarks,
+    landmarksAvailable:
+      activePresetKindRef.current === "character_swap" ||
+      activePresetKindRef.current === "gesture_fx",
     savePreset,
     flipCamera,
     presets,
