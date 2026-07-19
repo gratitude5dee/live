@@ -10,18 +10,22 @@ function DepthVideo({ stream }: { stream: MediaStream }) {
     const el = ref.current;
     if (!el) return;
     el.srcObject = stream;
-    el.play().catch(() => {});
+    const play = () => el.play().catch(() => {});
+    el.addEventListener("loadedmetadata", play);
+    play();
+    return () => el.removeEventListener("loadedmetadata", play);
   }, [stream]);
   return (
     <video
       ref={ref}
-      className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover"
+      className="absolute inset-0 z-10 h-full w-full -scale-x-100 object-cover"
       autoPlay
       playsInline
       muted
     />
   );
 }
+
 
 
 export default function MobileStage(p: StageViewProps) {
