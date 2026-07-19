@@ -218,6 +218,7 @@ function StagePage() {
       // Free-text / gesture / face / remote prompts should not bake MediaPipe
       // into Lucy's input — only preset apply paths can opt into that.
       if (source !== "preset") activePresetKindRef.current = "other";
+      syncOutboundSource();
       const next: PromptState = {
         text,
         refImage: ref?.dataUri,
