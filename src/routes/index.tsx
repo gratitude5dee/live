@@ -418,10 +418,7 @@ function StagePage() {
       const t = new VideoTransport(stream, {
         onOutputStream: (out) => {
           outputStreamRef.current = out;
-          if (outputVideoRef.current) {
-            outputVideoRef.current.srcObject = out;
-            outputVideoRef.current.play().catch(() => {});
-          }
+          setOutputStream(out);
           setConnState("live");
         },
         onTransportChosen: (mode) => {
