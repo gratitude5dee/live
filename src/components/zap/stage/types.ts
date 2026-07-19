@@ -42,6 +42,8 @@ export interface StageViewProps {
   stopSession: (reason?: "manual" | "timeout") => void;
   onRefUpload: (file: File) => void;
   clearRefImage: () => void;
+  applyRefImage: () => void;
+  refImagePending: boolean;
   savePreset: () => void;
   flipCamera: () => void;
   flipping: boolean;
