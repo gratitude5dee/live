@@ -1,8 +1,29 @@
 import SpecularButton from "@/components/reactbits/SpecularButton";
 import { Link } from "@tanstack/react-router";
+import { useEffect, useRef } from "react";
 import type { StageViewProps } from "./types";
 import type { TemplateKey } from "@/lib/zap/prompt-templates";
 import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
+
+function DepthVideo({ stream }: { stream: MediaStream }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.srcObject = stream;
+    el.play().catch(() => {});
+  }, [stream]);
+  return (
+    <video
+      ref={ref}
+      className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover"
+      autoPlay
+      playsInline
+      muted
+    />
+  );
+}
+
 
 export default function DesktopStage(p: StageViewProps) {
   const statusColor =
