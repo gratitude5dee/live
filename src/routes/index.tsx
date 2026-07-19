@@ -71,8 +71,6 @@ function StagePage() {
   const [facePresent, setFacePresent] = useState(true);
   const [perfMode, setPerfMode] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(0);
-  const [inputStream, setInputStream] = useState<MediaStream | null>(null);
-  const [outputStream, setOutputStream] = useState<MediaStream | null>(null);
 
   const inputVideoRef = useRef<HTMLVideoElement>(null);
   const outputVideoRef = useRef<HTMLVideoElement>(null);

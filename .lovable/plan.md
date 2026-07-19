@@ -1,54 +1,83 @@
-## Root cause
+## What's still broken
 
-When the user clicks **Zap Live**, `startSession()` runs:
+Screenshot shows `connState = live · frame`, MediaPipe reports `None 0.99` (a real gesture-recognizer result), and the hand-skeleton overlay is drawn — so the camera stream IS live and MediaPipe IS reading valid pixels from `inputVideoRef.current`. But both `<video>` elements (main output and PiP camera) render black.
 
-1. `setConnState("requesting_camera")` — schedules a re-render (still on the LandingHero screen, so no `<video>` elements are mounted yet).
-2. `await navigator.mediaDevices.getUserMedia(...)` — resolves quickly; React hasn't necessarily flushed yet.
-3. `if (inputVideoRef.current) inputVideoRef.current.srcObject = stream;` — the ref is still `null`, so **the assignment is silently skipped**.
-4. Session, transport, and fal all continue and eventually reach `live` — matching the "live · frame" chip in the screenshot — but the PiP video element mounts later with no `srcObject` and stays black.
+Root cause: the current attach path is `useState + useEffect`.
 
-The same race can affect `outputVideoRef` (frame-mode's canvas captureStream is delivered via `onOutputStream` after the connection settles, so it usually wins, but it's the same anti-pattern).
+```tsx
+useEffect(() => {
+  const v = inputVideoRef.current;
+  if (v && inputStream && v.srcObject !== inputStream) {
+    v.srcObject = inputStream;
+    v.play().catch(() => {});
+  }
+}, [inputStream]);
+```
 
-The MediaPipe "memory access out of bounds" warnings are unrelated noise from running inference against a video that has no frames — they'll stop once the stream is actually attached.
+Two ordering problems this pattern has:
+
+1. When `connState` transitions `idle → requesting_camera` and `setInputStream(stream)` fire in the same async tick, the effect can run in a commit where `inputVideoRef.current` was assigned but the browser hasn't yet flushed layout for the freshly-mounted `<video>`. On some browsers the `srcObject` write on a not-yet-connected video does nothing until the next microtask (`play()` resolves but the compositor never gets a frame). MediaPipe's WebGL path still reads via a texture upload from the element, which is why gesture recognition works even though the on-screen `<video>` is black.
+2. The effect only re-runs when `inputStream` changes — not when React ever remounts the `<video>` node. Any structural change (HUD toggle changing the PiP wrapper class, overlay resize, error banner appearing) that causes reconciliation to swap the node loses `srcObject` silently.
 
 ## Fix
 
-Stop assigning `srcObject` imperatively inside `startSession`. Store the input stream in state and attach it from a `useEffect` keyed on the stream + the ref. Do the same for the output stream so both videos are declarative.
+Replace both `ref={inputVideoRef}` / `ref={outputVideoRef}` with **callback refs** that attach `srcObject` at the exact moment the element mounts, and reattach on any remount. Keep the mutable refs so existing consumers (MediaPipe loop, MediaRecorder, cleanup) still work.
 
-### Changes to `src/routes/index.tsx`
+```tsx
+const attachInputVideo = useCallback((el: HTMLVideoElement | null) => {
+  inputVideoRef.current = el;
+  if (el && inputStreamRef.current && el.srcObject !== inputStreamRef.current) {
+    el.srcObject = inputStreamRef.current;
+    el.play().catch(() => {});
+  }
+}, []);
 
-1. Add two state values alongside the existing refs:
-   - `const [inputStream, setInputStream] = useState<MediaStream | null>(null);`
-   - `const [outputStream, setOutputStream] = useState<MediaStream | null>(null);`
-2. In `startSession`, after `getUserMedia`, call `setInputStream(stream)` (keep `inputStreamRef.current = stream` for the transport/recorder paths that read it synchronously). Remove the `inputVideoRef.current.srcObject = ...` + `.play()` block.
-3. In the transport `onOutputStream` callback, call `setOutputStream(out)` (keep `outputStreamRef.current = out`). Remove the imperative `outputVideoRef.current.srcObject = ...` block.
-4. Add one `useEffect` that attaches whichever stream is present:
-   ```ts
-   useEffect(() => {
-     const v = inputVideoRef.current;
-     if (v && inputStream && v.srcObject !== inputStream) {
-       v.srcObject = inputStream;
-       v.play().catch(() => {});
-     }
-   }, [inputStream]);
-   useEffect(() => {
-     const v = outputVideoRef.current;
-     if (v && outputStream && v.srcObject !== outputStream) {
-       v.srcObject = outputStream;
-       v.play().catch(() => {});
-     }
-   }, [outputStream]);
-   ```
-5. Add `autoPlay` to both `<video>` elements as a defensive measure so a rejected `.play()` promise (autoplay policy edge cases) still resolves on the next user gesture.
+const attachOutputVideo = useCallback((el: HTMLVideoElement | null) => {
+  outputVideoRef.current = el;
+  if (el && outputStreamRef.current && el.srcObject !== outputStreamRef.current) {
+    el.srcObject = outputStreamRef.current;
+    el.play().catch(() => {});
+  }
+}, []);
+```
 
-### Notes
+Then in `startSession` and `onOutputStream`, after setting the *Ref*, also attempt an immediate attach if the element is already mounted:
 
-- No changes to `VideoTransport`, session/DB, MediaPipe, or the landing flow.
-- Inference loop already guards on `inputVideoRef.current.readyState >= 2`, so it just starts producing real results once the stream is attached.
-- The MediaPipe wasm warnings should disappear once frames exist; if any persist they're benign and unrelated to this bug.
+```tsx
+inputStreamRef.current = stream;
+if (inputVideoRef.current) {
+  inputVideoRef.current.srcObject = stream;
+  inputVideoRef.current.play().catch(() => {});
+}
+```
 
-### Validation
+This covers both directions: stream-first (video mounts later → callback ref attaches) and video-first (stream arrives later → imperative attach).
 
-- Click **Zap Live** → PiP shows the webcam within ~1s and the main stage shows Lucy output once `live`.
-- Header chip still reads `live · webrtc` or `live · frame`.
-- No regression to Record, presets, Apply, Undo, Clear, or remote broadcast.
+Remove:
+- the `inputStream` / `outputStream` `useState` variables
+- the two `useEffect` blocks that watched them
+- `setInputStream` / `setOutputStream` calls
+
+Replace `ref={inputVideoRef}` → `ref={attachInputVideo}` and same for output.
+
+## Secondary fix (MediaPipe WASM crash)
+
+Console shows `RuntimeError: memory access out of bounds` from `vision_wasm_internal.wasm` on every frame. This happens when `recognizeForVideo` / `detectForVideo` is called with monotonically-close timestamps or with `videoWidth === 0`. Tighten the inference-loop guard:
+
+```tsx
+const v = inputVideoRef.current;
+if (v && v.readyState >= 2 && v.videoWidth > 0 && frame % everyN === 0) {
+  const ts = Math.round(performance.now());
+  // ...
+}
+```
+
+and pass integer `ts` (MediaPipe requires strictly increasing integer µs-ish timestamps; `ts + 0.1` for the face call violates that on repeats). Use `ts` and `ts + 1`.
+
+## Files changed
+
+- `src/routes/index.tsx` — callback refs, delete `inputStream`/`outputStream` state + effects, harden inference-loop guard, integer timestamps.
+
+## Verification
+
+After the change, on the deployed preview: click Zap Live → camera feed appears in PiP within one frame, Lucy output appears in main stage once fal returns. MediaPipe WASM warnings drop to zero when the video is ready.
