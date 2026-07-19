@@ -188,6 +188,18 @@ export default function DesktopStage(p: StageViewProps) {
               ref={p.overlayRef as React.RefObject<HTMLCanvasElement>}
               className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
             />
+            <button
+              onClick={p.toggleDepth}
+              disabled={!p.depthAvailable || p.depthLoading}
+              title={p.depthAvailable ? "Toggle WebGPU depth stream to Lucy" : "WebGPU not available"}
+              className={`absolute right-2 top-2 rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] backdrop-blur-xl transition disabled:opacity-40 ${
+                p.depthOn
+                  ? "border-cyan-300/60 bg-cyan-400/25 text-cyan-100"
+                  : "border-white/15 bg-black/60 text-white/70 hover:bg-white/10"
+              }`}
+            >
+              {p.depthLoading ? `Depth ${p.depthProgress}%` : p.depthOn ? "Depth · on" : "Depth"}
+            </button>
             {!p.facePresent && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-[11px] text-amber-300">
                 Step into frame
