@@ -831,16 +831,18 @@ function StagePage() {
             Library
           </Link>
           {connState === "live" && (
-            <button
+            <SpecularButton
+              size="sm"
+              radius={10}
               onClick={toggleRecord}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                recording
-                  ? "bg-[#F87171] text-black"
-                  : "bg-[#F87171]/20 text-[#F87171] hover:bg-[#F87171]/30"
-              }`}
+              tint={recording ? "#F87171" : "#F87171"}
+              tintOpacity={recording ? 0.9 : 0.15}
+              textColor={recording ? "#0a0a0f" : "#fca5a5"}
+              lineColor="#fca5a5"
+              baseColor="#7f1d1d"
             >
               {recording ? "■ Stop" : "⬤ Record"}
-            </button>
+            </SpecularButton>
           )}
         </div>
       </header>
@@ -943,9 +945,7 @@ function StagePage() {
         )}
 
         {/* Prompt dock */}
-        {/* Prompt dock */}
         {(
-
           <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-[#2A2A35] bg-[#16161D] p-3">
             <input
               value={prompt}
@@ -984,12 +984,18 @@ function StagePage() {
                 className="h-8 w-8 rounded object-cover"
               />
             )}
-            <button
+            <SpecularButton
+              size="sm"
+              radius={10}
               onClick={() => prompt.trim() && applyPrompt(prompt, "text")}
-              className="rounded-md bg-[#22D3EE] px-4 py-2 text-xs font-semibold text-black hover:bg-[#67E8F9]"
+              tint="#22D3EE"
+              tintOpacity={0.18}
+              textColor="#67e8f9"
+              lineColor="#67e8f9"
+              baseColor="#0e7490"
             >
               Apply
-            </button>
+            </SpecularButton>
             <button
               onClick={undo}
               disabled={!prevApplied}
