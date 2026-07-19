@@ -1253,6 +1253,11 @@ function StagePage() {
     applyPreset: (p: Preset) => void applyPreset(p),
     openTemplate: (key: TemplateKey, name: string) => setTemplateDialog({ key, name }),
     download,
+    depthOn,
+    depthLoading,
+    depthAvailable,
+    depthProgress,
+    toggleDepth,
   };
 
   return (
