@@ -554,6 +554,10 @@ function StagePage() {
     inputStreamRef.current = null;
     compositorRef.current?.stop();
     compositorRef.current = null;
+    depthEngineRef.current?.stop();
+    depthEngineRef.current = null;
+    depthOnRef.current = false;
+    setDepthOn(false);
     outputStreamRef.current = null;
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
