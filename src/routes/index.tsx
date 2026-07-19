@@ -735,14 +735,11 @@ function StagePage() {
     }, "image/png");
   }, [uploadTake]);
 
-  const toggleRecord = useCallback(() => {
-    if (recording) {
-      recorderRef.current?.stop();
-      return;
-    }
+  const startRecording = useCallback((auto: boolean) => {
+    if (recorderRef.current?.state === "recording") return;
     const s = outputStreamRef.current;
     if (!s) {
-      toast.error("Live stream not ready");
+      if (!auto) toast.error("Live stream not ready");
       return;
     }
     chunksRef.current = [];
@@ -750,22 +747,39 @@ function StagePage() {
       ? "video/webm;codecs=vp9"
       : "video/webm;codecs=vp8";
     const rec = new MediaRecorder(s, { mimeType });
+    autoRecordRef.current = auto;
     rec.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
     rec.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" });
       const dur = Math.round(performance.now() - recordStartRef.current);
-      uploadTake(blob, "video", dur);
+      const wasAuto = autoRecordRef.current;
+      const filename = `zap-live-${Date.now()}.webm`;
+      if (wasAuto) {
+        const url = URL.createObjectURL(blob);
+        setDownload({ url, filename });
+      }
+      uploadTake(blob, "video", dur, { autoDownload: !wasAuto });
       setRecording(false);
     };
     recordStartRef.current = performance.now();
     rec.start(1000);
     recorderRef.current = rec;
     setRecording(true);
-    // Auto-stop at 10 min
-    setTimeout(() => {
-      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
-    }, 10 * 60 * 1000);
-  }, [recording, uploadTake]);
+    // Auto-stop at 10 min for manual records
+    if (!auto) {
+      setTimeout(() => {
+        if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      }, 10 * 60 * 1000);
+    }
+  }, [uploadTake]);
+
+  const toggleRecord = useCallback(() => {
+    if (recording) {
+      recorderRef.current?.stop();
+      return;
+    }
+    startRecording(false);
+  }, [recording, startRecording]);
 
   // Keep appliedRef in sync
   useEffect(() => {
