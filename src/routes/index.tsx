@@ -650,16 +650,30 @@ function StagePage() {
 
     setConnState("requesting_camera");
     try {
+      // iOS Safari downgrades resolution aggressively when width/height/
+      // aspectRatio all conflict — request the phone's native portrait via
+      // facingMode only and let the browser pick optimal dims. Desktop can
+      // safely ask for 1080p landscape and we crop client-side.
+      const mobileCapture = typeof window !== "undefined"
+        && window.matchMedia("(max-width: 768px)").matches;
+      const videoConstraints: MediaTrackConstraints = mobileCapture
+        ? {
+            facingMode,
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 },
+          }
+        : {
+            facingMode,
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 },
+          };
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
-          aspectRatio: { ideal: 9 / 16 },
-          frameRate: { ideal: 30 },
-          facingMode,
-        },
+        video: videoConstraints,
         audio: false,
       });
+
 
       inputStreamRef.current = stream;
       if (inputVideoRef.current) {
