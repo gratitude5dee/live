@@ -825,6 +825,23 @@ function StagePage() {
     appliedRef.current = applied;
   }, [applied]);
 
+  // Auto-apply a preset selected from the landing "Choose your reality" wheel
+  useEffect(() => {
+    if (connState !== "live" || !presets.length) return;
+    let pending: string | null = null;
+    try {
+      pending = sessionStorage.getItem("zaplive.pendingPresetId");
+    } catch {
+      pending = null;
+    }
+    if (!pending) return;
+    const p = presets.find((x) => String(x.id) === pending);
+    try {
+      sessionStorage.removeItem("zaplive.pendingPresetId");
+    } catch {}
+    if (p) applyPreset(p, "preset");
+  }, [connState, presets, applyPreset]);
+
   useEffect(() => {
     pendingUploadRef.current = pendingUpload;
   }, [pendingUpload]);
