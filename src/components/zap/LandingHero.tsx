@@ -2,6 +2,7 @@ import LiquidEther from "@/components/reactbits/LiquidEther";
 import Strands from "@/components/reactbits/Strands";
 import GlassSurface from "@/components/reactbits/GlassSurface";
 import BubbleMenu from "@/components/reactbits/BubbleMenu";
+import ASCIIText from "@/components/reactbits/ASCIIText";
 import ChooseReality from "@/components/zap/ChooseReality";
 import ModesSection from "@/components/zap/ModesSection";
 import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
@@ -99,14 +100,11 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
             />
           </div>
 
-          {/* Hero copy */}
-          <h1 className="relative z-10 max-w-4xl text-center text-5xl font-semibold leading-[1.02] tracking-tight md:text-7xl">
-            Your webcam
-            <br />
-            <span className="bg-gradient-to-r from-[#67e8f9] via-[#c084fc] to-[#f472b6] bg-clip-text text-transparent">
-              is the timeline.
-            </span>
-          </h1>
+          {/* Hero — ASCII wordmark */}
+          <h1 className="sr-only">Zap Live — realtime video editor</h1>
+          <div className="relative z-10 h-[280px] w-full max-w-4xl md:h-[380px]">
+            <ASCIIText text="Zap!" enableWaves asciiFontSize={8} planeBaseHeight={8} />
+          </div>
 
           <p className="relative z-10 mt-6 max-w-xl text-center text-base text-white/60 md:text-lg">
             A realtime streaming video editor. Prompt, gesture, or reference —
