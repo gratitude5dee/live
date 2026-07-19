@@ -150,7 +150,7 @@ export default function ChooseReality({ onEnter, disabled }: ChooseRealityProps)
 
           {/* Preview column — nested double-bezel */}
           <div className="flex justify-center lg:justify-end">
-            <div className="w-full max-w-sm">
+            <div className="w-full max-w-[min(340px,80vw)] sm:max-w-sm">
               {/* Outer aluminum shell */}
               <div className="rounded-[2.5rem] bg-white/[0.03] p-2 shadow-[0_40px_100px_-20px_rgba(0,0,0,0.95)] ring-1 ring-white/10">
                 {/* Inner glass */}
