@@ -84,17 +84,7 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
           />
         </div>
       )}
-      {/* Bubble menu — pinned top */}
-      <BubbleMenu
-        useFixedPosition
-        logo={wzrdLogo.url}
-        menuAriaLabel="Toggle navigation"
-        items={menuItems}
-        animationDuration={0.5}
-        staggerDelay={0.1}
-      />
-
-      {/* HERO */}
+      {/* HERO + NAV wrapper — shared background spans behind nav */}
       <div className="relative min-h-[100dvh] w-full overflow-hidden">
         {/* LiquidEther background */}
         <div className="pointer-events-none absolute inset-0 -z-10">
@@ -120,7 +110,17 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
           }}
         />
 
-        <div className="relative mx-auto flex min-h-[100dvh] max-w-6xl flex-col items-center justify-center px-6 py-20 md:py-24">
+        {/* Bubble menu — pinned top, overlaid on background */}
+        <BubbleMenu
+          useFixedPosition
+          logo={wzrdLogo.url}
+          menuAriaLabel="Toggle navigation"
+          items={menuItems}
+          animationDuration={0.5}
+          staggerDelay={0.1}
+        />
+
+        <div className="relative z-10 mx-auto flex min-h-[100dvh] max-w-6xl flex-col items-center justify-center px-6 py-20 md:py-24">
           {/* Strands centerpiece */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-[360px] w-[560px] max-w-[95vw] -translate-x-1/2 -translate-y-[58%] md:h-[520px] md:w-[820px]">
             <Strands
@@ -157,7 +157,7 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
                 className="group flex h-full w-full items-center justify-center gap-3 rounded-full px-6 text-base font-medium text-white disabled:opacity-50"
               >
                 <span className="tracking-wide">
-                  {disabled ? "Loading…" : "Zap Live"}
+                  {disabled ? "Loading…" : "Computah! Activate"}
                 </span>
                 <span
                   aria-hidden
