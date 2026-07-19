@@ -1,30 +1,48 @@
-## Diagnosis
+## Problem
 
-Computah currently speaks a full acknowledgment sentence and often skips or delays the tool call. Two fixes:
+Two symptoms, one root cause:
 
-1. **Silence the voice output.** Switch the Realtime session from audio-out to text-out — no TTS at all. Users hear nothing; they get instant visual feedback (existing HUD chip already shows the one-word ack + intent label).
-2. **Force the tool call.** Tighten the system prompt so the model's ONLY job is to emit `apply_video_edit` on any wake-word command, no chit-chat, no confirmation.
+1. Console: `Missing required parameter: 'session.type'` — thrown by OpenAI Realtime the moment we send `session.update`.
+2. Computah replies conversationally instead of firing `apply_video_edit` — because the `session.update` was rejected, the server never received our instructions, tools, or `tool_choice: "auto"`. It falls back to the default assistant persona with no tools registered, so no metaprompt is applied and no tool call reaches Lucy.
 
-The Lucy metaprompting already works end-to-end: the tool's `lucy_prompt` argument is filled from the 7 edit templates and forwarded to `applyPrompt(..., "voice", ref)` on the client, which sends it straight into the Lucy transport. The user's complaint is upstream: the model was talking too much and sometimes never firing the tool.
+The GA `gpt-realtime` model uses the new session schema where the `session` object requires a discriminator field `type: "realtime"` (vs `"transcription"`), and `output_modalities` / `audio` / `tools` all live under that same realtime session block. Our current payload omits `type`, so the whole update is dropped.
 
-## Changes
+## Fix (single file: `src/lib/zap/voice-agent.ts`)
 
-### `src/lib/zap/voice-agent.ts`
-- `output_modalities: ["audio"]` → `["text"]`. Drops all TTS. Skip the audio-transcript handlers (they won't fire).
-- Remove audio playback wiring is no-op — the browser just gets no incoming audio track.
+Update `configureSession()` to send the GA-shaped payload:
 
-### `src/lib/zap/voice-intent.ts`
-- Rewrite `COMPUTAH_INSTRUCTIONS` to a lean, imperative spec:
-  - Never speak. Never write prose. Your ONLY output is a tool call.
-  - On wake-word command → `apply_video_edit` immediately.
-  - On silence / no wake word / unclear → `wait_for_user`.
-  - Keep the 7 edit-type templates and classification hints unchanged (that's the metaprompt).
-  - Drop the ack lexicon and "single word" rules — irrelevant with text-only + auto-hidden output.
-- Also fix the stale `OPENAI_REALTIME_MODEL = "gpt-realtime-2-mini"` fallback constant to `"gpt-realtime"` (server already returns the correct model but this keeps the client fallback honest).
+```ts
+this.send({
+  type: "session.update",
+  session: {
+    type: "realtime",
+    model: this.model,
+    instructions: COMPUTAH_INSTRUCTIONS,
+    tools: COMPUTAH_TOOLS,
+    tool_choice: "auto",
+    output_modalities: ["text"],
+    audio: {
+      input: {
+        turn_detection: { type: "semantic_vad" },
+        transcription: { model: "gpt-4o-mini-transcribe" },
+      },
+    },
+  },
+});
+```
 
-### HUD (no code change, just noting behavior)
-- The HUD already shows `voiceState`, transcript, and `voiceIntentLabel` chip. With no TTS, the intent chip flashing when a tool call fires becomes the sole feedback — which is what the user asked for.
+Key changes vs current code:
+- Add `type: "realtime"` (fixes the 400).
+- Add `model: this.model` (GA schema requires it inside the session block).
+- Everything else stays as-is; `output_modalities: ["text"]` keeps Computah silent as previously requested.
 
-## Out of scope
-- Tool schema, Lucy transport, `applyPrompt`, HUD component.
-- Wake-word regex / heuristics.
+## Verification
+
+1. Typecheck.
+2. In the preview, click Computah, say "make the background a beach". Expect:
+   - No `missing_required_parameter` error in console.
+   - HUD shows the intent chip (e.g. "Scene change").
+   - Lucy's feed repaints — confirms the tool call reached `applyPrompt`.
+3. If OpenAI now rejects any other field on the GA schema, read the error message and align that specific field only; do not carry over pre-GA shapes.
+
+No other files change. No changes to `voice-intent.ts` (tools/instructions are already correct) or `openai-token.functions.ts` (model id `gpt-realtime` is correct).
