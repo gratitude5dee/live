@@ -328,7 +328,7 @@ function StagePage() {
   const logPromptEvent = useCallback(
     async (
       kind: "apply" | "undo" | "clear" | "preset" | "reactive",
-      source: "text" | "gesture" | "face" | "preset" | "remote",
+      source: "text" | "gesture" | "face" | "preset" | "remote" | "voice",
       p: PromptState | null,
     ) => {
       const sid = sessionIdRef.current;
