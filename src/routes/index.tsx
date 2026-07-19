@@ -1404,6 +1404,8 @@ function StagePage() {
       activePresetKindRef.current === "gesture_fx",
     savePreset,
     flipCamera,
+    flipping,
+    facingMode,
     presets,
     applyPreset: (p: Preset) => void applyPreset(p),
     openTemplate: (key: TemplateKey, name: string) => setTemplateDialog({ key, name }),
