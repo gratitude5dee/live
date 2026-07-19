@@ -121,10 +121,6 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
         />
 
         <div className="relative mx-auto flex min-h-[100dvh] max-w-6xl flex-col items-center justify-center px-6 py-20 md:py-24">
-          <span className="mb-6 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.28em] backdrop-blur md:mb-8">
-            <ShinyText text="ZAP · LIVE" color="#8a8f98" shineColor="#ffffff" speed={5} spread={140} />
-          </span>
-
           {/* Strands centerpiece */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 h-[360px] w-[560px] max-w-[95vw] -translate-x-1/2 -translate-y-[58%] md:h-[520px] md:w-[820px]">
             <Strands
@@ -144,6 +140,10 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
             <ASCIIText text="Zap!" enableWaves asciiFontSize={8} planeBaseHeight={8} />
           </div>
 
+          <span className="relative z-10 mt-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.28em] backdrop-blur md:mt-4">
+            <ShinyText text="ZAP · LIVE" color="#8a8f98" shineColor="#ffffff" speed={5} spread={140} />
+          </span>
+
           <p className="relative z-10 mt-4 max-w-xl whitespace-pre-line px-2 text-center text-sm sm:text-base md:mt-6 md:text-lg">
             <ShinyText
               text={"Create your reality in realtime with Zap!\nBuilt for streamers, digital shop sellers, and wizards looking to\nbend their reality."}
@@ -153,6 +153,7 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
               spread={150}
             />
           </p>
+
 
           {/* Glass CTA */}
           <div className="relative z-10 mt-12">
