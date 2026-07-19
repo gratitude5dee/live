@@ -114,6 +114,7 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
         <BubbleMenu
           useFixedPosition
           logo={wzrdLogo.url}
+          logoHref="https://wzrd.tech"
           menuAriaLabel="Toggle navigation"
           items={menuItems}
           animationDuration={0.5}
