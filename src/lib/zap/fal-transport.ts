@@ -80,6 +80,26 @@ export class VideoTransport {
         this.flushPrompt();
       };
 
+      pc.onicecandidate = (ev) => {
+        if (this.closed || !this.connection) return;
+        try {
+          if (ev.candidate) {
+            this.connection.send({ candidate: ev.candidate.toJSON() });
+          } else {
+            // End-of-candidates signal
+            this.connection.send({ candidate: null });
+          }
+        } catch (error) {
+          console.warn("failed to forward ICE candidate", error);
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        if (pc.iceConnectionState === "failed") {
+          this.cb.onError(new Error("Lucy ICE negotiation failed (network/firewall)"));
+        }
+      };
+
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === "connected") {
           if (this.connectTimeout) clearTimeout(this.connectTimeout);
