@@ -157,7 +157,7 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
                 className="group flex h-full w-full items-center justify-center gap-3 rounded-full px-6 text-base font-medium text-white disabled:opacity-50"
               >
                 <span className="tracking-wide">
-                  {disabled ? "Loading…" : "Zap Live"}
+                  {disabled ? "Loading…" : "Computah! Activate"}
                 </span>
                 <span
                   aria-hidden
