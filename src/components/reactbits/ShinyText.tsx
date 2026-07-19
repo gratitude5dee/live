@@ -14,7 +14,7 @@ interface ShinyTextProps {
   pauseOnHover?: boolean;
   direction?: "left" | "right";
   delay?: number;
-  as?: keyof JSX.IntrinsicElements;
+  
 }
 
 const ShinyText = ({
