@@ -199,6 +199,9 @@ function StagePage() {
       ref?: { dataUri: string; path?: string } | null,
     ) => {
       if (!transportRef.current) return;
+      // Free-text / gesture / face / remote prompts should not bake MediaPipe
+      // into Lucy's input — only preset apply paths can opt into that.
+      if (source !== "preset") activePresetKindRef.current = "other";
       const next: PromptState = {
         text,
         refImage: ref?.dataUri,
@@ -303,6 +306,9 @@ function StagePage() {
       }
       const ref = { dataUri: payload.dataUri, path };
       setRefImage(ref);
+      // Templates (object add-in, try-on, object replace) rely on the ref
+      // image, not on baked landmarks — send Lucy a clean camera frame.
+      activePresetKindRef.current = "other";
       await applyPrompt(payload.prompt, "preset", ref);
       toast.success("Applied");
     },
@@ -432,6 +438,7 @@ function StagePage() {
     }
     autoStopScheduledRef.current = false;
     setRemainingMs(null);
+    activePresetKindRef.current = "other";
 
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
