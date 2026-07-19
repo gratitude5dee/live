@@ -11,6 +11,8 @@ import { drawHandOverlay, drawFaceOverlay } from "@/lib/zap/overlay";
 import { loadGestureRecognizer, loadFaceLandmarker } from "@/lib/zap/mediapipe";
 import LandingHero from "@/components/zap/LandingHero";
 import SpecularButton from "@/components/reactbits/SpecularButton";
+import TemplateDialog, { type TemplateApplyPayload } from "@/components/zap/TemplateDialog";
+import type { TemplateKey } from "@/lib/zap/prompt-templates";
 import {
   REACTIVE_PROMPTS,
   type ConnectionState,
