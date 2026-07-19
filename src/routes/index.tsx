@@ -94,6 +94,7 @@ function StagePage() {
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const inputStreamRef = useRef<MediaStream | null>(null);
   const outputStreamRef = useRef<MediaStream | null>(null);
+  const compositorRef = useRef<CompositeStream | null>(null);
   const transportRef = useRef<VideoTransport | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
