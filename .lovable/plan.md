@@ -1,21 +1,42 @@
-# Add disconnect control + 90s auto-disconnect
+## Add image + prompt presets
 
-## Changes
+Upload the 6 uploaded reference images as Lovable Assets, extend the `presets` table with a thumbnail/reference URL, seed the new presets, and render the thumbnails in the preset rail. Clicking a character-swap preset auto-loads its reference image as the active reference so Lucy gets the identity to match.
 
-### `src/routes/index.tsx`
-- Track `liveStartedAt` when the transport reports `onTransportChosen` (i.e. Lucy stream is live).
-- Start a 90-second timer at that moment; on expiry, call the same `stopSession()` path used for manual teardown and surface a toast/status: "Session ended after 90s".
-- Add a visible **Disconnect** button in the live HUD (top-right of the stage, next to existing session stats). Clicking it:
-  - Clears the auto-disconnect timer
-  - Calls `stopSession()` (closes `VideoTransport`, stops MediaPipe loop, stops the webcam tracks, flushes vision buffer, marks the session ended)
-  - Returns the UI to the `LandingHero` state so the user can start a new session
-- Add a live countdown badge ("Ends in 1:23") next to the Disconnect button, updated once per second, so the auto-stop is not surprising.
-- Ensure the timer is cleared on unmount and on any error path that already tears down the transport.
+### 1. Upload images as Lovable Assets
+Run `lovable-assets create` for each of the 6 uploaded files into `src/assets/presets/`:
+- `kanye.webp` → Man in black hooded windbreaker
+- `metlife2.jpg` → NFL stadium at night
+- `drake.webp` → Performer in leather vest
+- `metlife-stadium-photo.webp` → Soccer stadium daylight
+- `neon.webp` → Streamer on green background
+- `mbappe.webp` → Player in black-and-pink kit
+- `messi.webp` → bonus (skip unless needed — not in the request list)
 
-### Nothing else changes
-- No transport, signaling, or fal changes.
-- No schema, auth, presets, or remote-control changes.
-- The 90s window is a hard client-side cap; the underlying fal token continues to auto-refresh until we close, so no server changes needed.
+### 2. Migration: extend `presets`
+```sql
+alter table public.presets
+  add column if not exists thumbnail_url text,
+  add column if not exists ref_image_url text;
 
-## Verification
-Click **Zap Live** → wait for "live" → confirm countdown appears and Disconnect button works immediately. Let a second session run untouched and confirm it tears down cleanly at 0:00 with camera light off and UI back on landing.
+insert into public.presets (user_id, name, emoji, prompt, requires_ref, sort_order, thumbnail_url, ref_image_url) values
+  (null, 'Hooded Windbreaker', '🧥', '<prompt 1>', true, 200, '<kanye url>', '<kanye url>'),
+  (null, 'NFL Night',           '🏟️', '<prompt 2>', false, 210, '<metlife2 url>', null),
+  (null, 'Leather Vest',        '🎤', '<prompt 3>', true, 220, '<drake url>', '<drake url>'),
+  (null, 'Soccer Daylight',     '⚽',  '<prompt 4>', false, 230, '<metlife url>', null),
+  (null, 'Streamer',            '💻', '<prompt 5>', true, 240, '<neon url>', '<neon url>'),
+  (null, 'Pink Stripe Kit',     '🌸', '<prompt 6>', true, 250, '<mbappe url>', '<mbappe url>');
+```
+Regenerate `src/integrations/supabase/types.ts` (add the two nullable string columns).
+
+### 3. UI updates in `src/routes/index.tsx`
+- **Preset button:** if `p.thumbnail_url`, render a small rounded thumbnail (with the emoji as a corner badge) instead of the emoji-only tile. Keep name as tooltip/label.
+- **applyPreset:** when `preset.ref_image_url` is set, fetch it → data URI, `setRefImage({ dataUri, path: preset.ref_image_url })`, then call `applyPrompt(preset.prompt, source, {dataUri, path})`. This satisfies `requires_ref` without the user uploading anything.
+- Cache converted data URIs in a ref map so re-clicking is instant.
+
+### 4. No other file changes needed
+`Preset` type auto-updates from regenerated Supabase types. Remote/gesture flows continue to work since they call `applyPreset`.
+
+### Technical notes
+- Prompts are the exact strings from the user's message.
+- `ref_image_url` doubles as the thumbnail source and the reference sent to Lucy for character-swap presets. Scene presets (stadiums) have `ref_image_url = null` and `requires_ref = false`.
+- The layered combo isn't a stored preset — it can be reproduced by clicking the NFL Night scene then the Hooded Windbreaker character preset in sequence (each apply stacks over the current state).
