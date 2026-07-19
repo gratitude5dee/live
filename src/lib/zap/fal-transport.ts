@@ -1,7 +1,5 @@
-import {
-  createLucySession,
-  heartbeatLucySession,
-} from "@/lib/wma-session.functions";
+import { fal } from "@fal-ai/client";
+import { mintFalRealtimeToken } from "@/lib/fal-token.functions";
 
 type TransportCallbacks = {
   onOutputStream: (stream: MediaStream) => void;
@@ -25,9 +23,7 @@ export class VideoTransport {
   private inputStream: MediaStream;
   private cb: TransportCallbacks;
   private pc: RTCPeerConnection | null = null;
-  private controlChannel: RTCDataChannel | null = null;
-  private sessionId: string | null = null;
-  private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private connection: ReturnType<typeof fal.realtime.connect> | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
   private outboundPaused = false;
@@ -60,12 +56,6 @@ export class VideoTransport {
     this.flushPrompt();
   };
 
-  private attachControlChannel(channel: RTCDataChannel) {
-    this.controlChannel = channel;
-    channel.onopen = () => this.flushPrompt();
-    channel.onerror = () => this.cb.onError(new Error("Lucy control channel failed"));
-  }
-
   private async beginWebRTC(iceServers: RTCIceServer[]) {
     try {
       const pc = new RTCPeerConnection({ iceServers });
@@ -76,23 +66,54 @@ export class VideoTransport {
         pc.addTrack(track, this.inputStream);
       }
       pc.addTransceiver("video", { direction: "recvonly" });
-      pc.ondatachannel = (event) => this.attachControlChannel(event.channel);
 
       pc.ontrack = (ev) => {
         if (this.closed) return;
         const remote = ev.streams[0] ?? new MediaStream([ev.track]);
         this.cb.onOutputStream(remote);
+        this.cb.onTransportChosen("webrtc");
+        this.flushPrompt();
       };
 
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === "connected") {
           if (this.connectTimeout) clearTimeout(this.connectTimeout);
           this.connectTimeout = null;
-          this.cb.onTransportChosen("webrtc");
         } else if (pc.connectionState === "failed") {
           this.cb.onError(new Error("Lucy WebRTC connection failed"));
         }
       };
+
+      const connection = fal.realtime.connect("decart/lucy-2-5/realtime", {
+        clientOnly: true,
+        tokenProvider: async (app) =>
+          mintFalRealtimeToken({ data: { app } }),
+        tokenExpirationSeconds: 10,
+        onResult: (result: unknown) => {
+          if (this.closed || !this.pc) return;
+          const message = result as {
+            type?: RTCSdpType;
+            sdp?: string;
+            candidate?: RTCIceCandidateInit | null;
+            error?: unknown;
+          };
+          if (message.error) {
+            this.cb.onError(new Error("Lucy signaling failed"));
+            return;
+          }
+          if (message.sdp && message.type) {
+            void this.pc
+              .setRemoteDescription({ type: message.type, sdp: message.sdp })
+              .catch((error) => this.cb.onError(error));
+          } else if (message.candidate) {
+            void this.pc
+              .addIceCandidate(message.candidate)
+              .catch((error) => this.cb.onError(error));
+          }
+        },
+        onError: (error) => this.cb.onError(error),
+      });
+      this.connection = connection;
 
       const offer = await pc.createOffer({
         offerToReceiveVideo: true,
@@ -117,19 +138,7 @@ export class VideoTransport {
 
       const sdp = pc.localDescription?.sdp;
       if (!sdp) throw new Error("WebRTC offer was empty");
-      const answer = await createLucySession({
-        data: { type: "offer", sdp },
-      });
-      if (this.closed) return;
-      this.sessionId = answer.session_id;
-      await pc.setRemoteDescription({ type: "answer", sdp: answer.sdp });
-
-      this.heartbeat = setInterval(() => {
-        if (!this.sessionId || this.closed) return;
-        heartbeatLucySession({ data: { sessionId: this.sessionId } }).catch(
-          (error) => console.warn("Lucy heartbeat error", error),
-        );
-      }, 5_000);
+      connection.send({ type: "offer", sdp });
       this.connectTimeout = setTimeout(() => {
         if (pc.connectionState !== "connected") {
           this.cb.onError(new Error("Lucy did not establish a media connection"));
@@ -142,18 +151,16 @@ export class VideoTransport {
   }
 
   private flushPrompt() {
-    if (!this.lastPrompt || this.controlChannel?.readyState !== "open") return;
+    if (!this.lastPrompt || !this.connection) return;
     const payload = this.lastPrompt;
     try {
-      this.controlChannel.send(
-        JSON.stringify({
-          prompt: payload.prompt,
-          enable_prompt_expansion: payload.enable_prompt_expansion ?? true,
-          ...(payload.reference_image_url
-            ? { reference_image_url: payload.reference_image_url }
-            : {}),
-        }),
-      );
+      this.connection.send({
+        prompt: payload.prompt,
+        enable_prompt_expansion: payload.enable_prompt_expansion ?? true,
+        ...(payload.reference_image_url
+          ? { reference_image_url: payload.reference_image_url }
+          : {}),
+      });
     } catch (error) {
       this.cb.onError(error);
     }
@@ -161,16 +168,14 @@ export class VideoTransport {
 
   close() {
     this.closed = true;
-    if (this.heartbeat) clearInterval(this.heartbeat);
     if (this.connectTimeout) clearTimeout(this.connectTimeout);
-    this.heartbeat = null;
     this.connectTimeout = null;
     try {
-      this.controlChannel?.close();
+      this.connection?.close();
     } catch {
       // ignore
     }
-    this.controlChannel = null;
+    this.connection = null;
     if (this.pc) {
       try {
         this.pc.close();
@@ -179,6 +184,5 @@ export class VideoTransport {
       }
       this.pc = null;
     }
-    this.sessionId = null;
   }
 }
