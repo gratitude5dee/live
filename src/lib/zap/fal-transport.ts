@@ -125,7 +125,7 @@ export class VideoTransport {
           if (pc.connectionState !== "connected") {
             this.cb.onError(new Error("Lucy did not establish a media connection"));
           }
-        }, 15_000);
+        }, 20_000);
       };
 
       const connection = fal.realtime.connect("decart/lucy-2-5/realtime", {
