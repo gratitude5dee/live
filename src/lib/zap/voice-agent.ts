@@ -132,6 +132,8 @@ export class VoiceAgent {
     this.send({
       type: "session.update",
       session: {
+        type: "realtime",
+        model: this.model,
         instructions: COMPUTAH_INSTRUCTIONS,
         tools: COMPUTAH_TOOLS,
         tool_choice: "auto",
