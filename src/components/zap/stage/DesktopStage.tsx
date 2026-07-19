@@ -112,9 +112,9 @@ export default function DesktopStage(p: StageViewProps) {
       )}
 
       {/* Left rail: presets */}
-      <aside className="fixed left-6 top-24 bottom-32 z-20 flex w-[260px] flex-col rounded-[2rem] border border-white/10 bg-black/50 p-1.5 backdrop-blur-2xl">
-        <div className="flex min-h-0 flex-1 flex-col rounded-[calc(2rem-0.375rem)] bg-black/40 p-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]">
-          <div className="mb-3 flex items-center justify-between">
+      <aside className="fixed left-6 top-24 bottom-32 z-20 flex w-[240px] flex-col rounded-[2rem] border border-white/10 bg-black/50 p-1.5 backdrop-blur-2xl">
+        <div className="flex min-h-0 flex-1 flex-col rounded-[calc(2rem-0.375rem)] bg-black/40 p-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]">
+          <div className="mb-2 flex items-center justify-between px-1">
             <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
               Presets
             </span>
@@ -127,20 +127,53 @@ export default function DesktopStage(p: StageViewProps) {
               </button>
             )}
           </div>
-          <div className="-mr-2 flex flex-1 flex-col gap-2 overflow-y-auto pr-2">
-            {p.presets.map((preset, i) => (
-              <PresetRow
-                key={preset.id}
-                preset={preset}
-                index={i}
-                refImage={p.refImage}
-                onApply={() => p.applyPreset(preset)}
-                onTemplate={(k, n) => p.openTemplate(k, n)}
-              />
-            ))}
+          <div className="-mr-2 flex flex-1 flex-col gap-1 overflow-y-auto pr-2 pb-2">
+            {(() => {
+              const templates = p.presets.filter(
+                (x) => (x as unknown as { kind?: string }).kind === "template",
+              );
+              const others = p.presets.filter(
+                (x) => (x as unknown as { kind?: string }).kind !== "template",
+              );
+              return (
+                <>
+                  {templates.length > 0 && (
+                    <div className="mt-1 mb-1 px-1 text-[9px] uppercase tracking-[0.22em] text-fuchsia-300/50">
+                      Templates
+                    </div>
+                  )}
+                  {templates.map((preset) => (
+                    <PresetRow
+                      key={preset.id}
+                      preset={preset}
+                      index={p.presets.indexOf(preset)}
+                      refImage={p.refImage}
+                      onApply={() => p.applyPreset(preset)}
+                      onTemplate={(k, n) => p.openTemplate(k, n)}
+                    />
+                  ))}
+                  {templates.length > 0 && others.length > 0 && (
+                    <div className="mt-3 mb-1 px-1 text-[9px] uppercase tracking-[0.22em] text-white/30">
+                      Looks
+                    </div>
+                  )}
+                  {others.map((preset) => (
+                    <PresetRow
+                      key={preset.id}
+                      preset={preset}
+                      index={p.presets.indexOf(preset)}
+                      refImage={p.refImage}
+                      onApply={() => p.applyPreset(preset)}
+                      onTemplate={(k, n) => p.openTemplate(k, n)}
+                    />
+                  ))}
+                </>
+              );
+            })()}
           </div>
         </div>
       </aside>
+
 
       {/* Right HUD stack */}
       <aside className="fixed right-6 top-24 z-20 flex w-[300px] flex-col gap-3">
@@ -348,35 +381,35 @@ function PresetRow({
     <button
       onClick={() => (isTemplate && templateKey ? onTemplate(templateKey, preset.name) : onApply())}
       disabled={disabled}
-      className={`group flex items-center gap-3 overflow-hidden rounded-2xl border p-1.5 text-left transition disabled:opacity-30 ${
+      className={`group flex h-11 w-full shrink-0 items-center gap-2.5 rounded-xl border pl-1 pr-2.5 text-left transition disabled:opacity-30 ${
         isTemplate
-          ? "border-dashed border-fuchsia-400/40 hover:border-fuchsia-400/80"
-          : "border-white/10 hover:border-cyan-300/50"
-      } hover:bg-white/[0.03]`}
-      title={`${preset.name}${index < 9 ? ` (${index + 1})` : ""}`}
+          ? "border-dashed border-fuchsia-400/40 hover:border-fuchsia-400/80 hover:bg-fuchsia-400/[0.04]"
+          : "border-white/10 hover:border-cyan-300/40 hover:bg-white/[0.04]"
+      }`}
+      title={`${preset.name}${index < 9 ? ` (⌘${index + 1})` : ""}`}
     >
       {preset.thumbnail_url ? (
-        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl">
-          <img
-            src={preset.thumbnail_url}
-            alt=""
-            className="h-full w-full object-cover transition group-hover:scale-105"
-          />
-        </div>
+        <img
+          src={preset.thumbnail_url}
+          alt=""
+          className="h-9 w-9 shrink-0 rounded-lg object-cover"
+        />
       ) : (
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/[0.04] text-xl">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.05] text-base leading-none">
           {preset.emoji}
         </div>
       )}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-white/90 truncate">{preset.name}</span>
-          {isTemplate && <span className="text-[10px] text-fuchsia-300/80">📥</span>}
-        </div>
-        <div className="text-[10px] text-white/30">
-          {isTemplate ? "drop an image" : index < 9 ? `⌘${index + 1}` : preset.emoji}
-        </div>
-      </div>
+      <span className="min-w-0 flex-1 truncate text-[13px] leading-none text-white/85">
+        {preset.name}
+      </span>
+      <span
+        className={`shrink-0 text-[10px] tabular-nums ${
+          isTemplate ? "text-fuchsia-300/70" : "text-white/30"
+        }`}
+      >
+        {isTemplate ? "＋img" : index < 9 ? `⌘${index + 1}` : ""}
+      </span>
     </button>
   );
 }
+

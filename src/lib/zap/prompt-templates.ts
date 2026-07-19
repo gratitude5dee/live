@@ -1,4 +1,4 @@
-export type TemplateKey = "object_add" | "clothing_tryon";
+export type TemplateKey = "object_add" | "clothing_tryon" | "object_replace";
 
 export type TemplateOpts = {
   detail?: string;
@@ -24,6 +24,11 @@ export function buildTemplatePrompt(key: TemplateKey, opts: TemplateOpts = {}): 
       const slot = opts.slot?.trim() || "top";
       return `Replace the person's ${slot} with ${garment}, matching its color, material, texture, fit, and any logos or trims. The garment moves naturally with the body. Keep the person's identity, face, hair, pose, and background unchanged.`;
     }
+    case "object_replace": {
+      const replacement = detail || "the object from the reference image";
+      const target = opts.placement?.trim() || "the object the person is holding";
+      return `Replace ${target} with ${replacement}, matching its scale, orientation, and grip so it looks physically held. Preserve the person's hand pose, fingers, identity, face, clothing, lighting, and background exactly. The new object moves with the hand naturally frame to frame.`;
+    }
   }
 }
 
@@ -40,5 +45,10 @@ export const TEMPLATE_META: Record<
     placementLabel: "Garment slot",
     placementPlaceholder: "top, jacket, dress, hat…",
     detailPlaceholder: "e.g. glossy black leather jacket, silver zipper",
+  },
+  object_replace: {
+    placementLabel: "What to replace",
+    placementPlaceholder: "e.g. the phone in the person's hand",
+    detailPlaceholder: "e.g. the plush green backpack from the reference image",
   },
 };
