@@ -106,6 +106,30 @@ export default function MobileStage(p: StageViewProps) {
             )}
             <span>{p.facingMode === "user" ? "Front" : "Back"}</span>
           </button>
+          {p.voiceAvailable && (
+            <button
+              onClick={p.toggleVoice}
+              aria-label="Toggle Computah voice"
+              className={`grid h-8 w-8 place-items-center rounded-full border backdrop-blur-xl active:scale-95 ${
+                p.voiceState === "armed"
+                  ? "border-emerald-300/50 bg-emerald-400/20 text-emerald-100"
+                  : p.voiceState === "connecting"
+                    ? "border-amber-300/40 bg-amber-300/20 text-amber-100"
+                    : p.voiceState === "thinking"
+                      ? "border-cyan-300/50 bg-cyan-400/20 text-cyan-100"
+                      : p.voiceState === "error"
+                        ? "border-red-400/50 bg-red-400/20 text-red-100"
+                        : "border-white/10 bg-black/60 text-white/70"
+              }`}
+              title={
+                p.voiceState === "off"
+                  ? 'Turn on Computah voice — say "Computah" then your edit'
+                  : "Turn off Computah"
+              }
+            >
+              🎙
+            </button>
+          )}
           <button
             onClick={() => setShowQr((v) => !v)}
             aria-label="Show remote QR"
