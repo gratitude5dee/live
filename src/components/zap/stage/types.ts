@@ -1,5 +1,5 @@
 import type { RefCallback } from "react";
-import type { ConnectionState, Preset, PromptState } from "@/lib/zap/types";
+import type { ConnectionState, Preset, PromptState, VoiceState } from "@/lib/zap/types";
 import type { TemplateKey } from "@/lib/zap/prompt-templates";
 
 export type LiveGesture = { label: string | null; score: number; hold: number };
