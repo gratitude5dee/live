@@ -83,6 +83,10 @@
   height: 100%;
 }
 
+.bubble-menu .logo-content[href] {
+  text-decoration: none;
+}
+
 @media (min-width: 768px) {
   .bubble-menu .logo-content { width: auto; }
 }
