@@ -105,6 +105,10 @@ function StagePage() {
   const transportStateRef = useRef<"webrtc" | null>(null);
   const perfModeRef = useRef(false);
   const pendingUploadRef = useRef(0);
+  const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoStopScheduledRef = useRef(false);
+
 
   // --- Anonymous auth on mount ---
   useEffect(() => {
