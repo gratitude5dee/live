@@ -3,6 +3,7 @@ import Strands from "@/components/reactbits/Strands";
 import GlassSurface from "@/components/reactbits/GlassSurface";
 import BubbleMenu from "@/components/reactbits/BubbleMenu";
 import ASCIIText from "@/components/reactbits/ASCIIText";
+import GhostCursor from "@/components/reactbits/GhostCursor";
 import ChooseReality from "@/components/zap/ChooseReality";
 import ModesSection from "@/components/zap/ModesSection";
 import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
@@ -46,6 +47,28 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
 
   return (
     <div className="relative w-full bg-[#050505] text-[#FAFAFA]">
+      {/* Ghost cursor trail — full-viewport overlay */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0"
+        style={{ zIndex: 40 }}
+      >
+        <GhostCursor
+          color="#B497CF"
+          brightness={1}
+          edgeIntensity={0}
+          trailLength={50}
+          inertia={0.5}
+          grainIntensity={0.05}
+          bloomStrength={0.1}
+          bloomRadius={1.0}
+          bloomThreshold={0.025}
+          fadeDelayMs={1000}
+          fadeDurationMs={1500}
+          mixBlendMode="screen"
+          zIndex={40}
+        />
+      </div>
       {/* Bubble menu — pinned top */}
       <BubbleMenu
         useFixedPosition
@@ -107,8 +130,8 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
           </div>
 
           <p className="relative z-10 mt-6 max-w-xl text-center text-base text-white/60 md:text-lg">
-            A realtime streaming video editor. Prompt, gesture, or reference —
-            Lucy 2.5 repaints every frame in under a second.
+            Create your reality in realtime with Zap! Built for streamers,
+            digital shop sellers, and wizards looking to bend their reality.
           </p>
 
           {/* Glass CTA */}

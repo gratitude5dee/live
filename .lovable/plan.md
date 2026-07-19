@@ -1,19 +1,14 @@
-# Plan: Swap hero headline for animated ASCIIText "Zap!"
-
 ## Changes
 
-1. **New component** `src/components/reactbits/ASCIIText.tsx`
-   - Port the provided JS component to TSX (`// @ts-nocheck` for shader glue).
-   - `three` is already installed — no new deps.
-   - Fix the broken snippet: source has a truncated `return (...)`. Restore proper JSX: `<div ref={containerRef} className="ascii-text-container">` with the `<style>` tag inside.
-   - Font loading: instead of the source's inline `@import` inside `<style>` (which is fine at runtime — it's a browser-parsed style block, not Lightning CSS), add IBM Plex Mono via a `<link>` tag in `src/routes/__root.tsx` head to preload cleanly. Keep the inline `<style>` for the container-scoped canvas/pre CSS only.
+1. **Update tagline copy** in `src/components/zap/LandingHero.tsx`
+   - Replace: `A realtime streaming video editor. Prompt, gesture, or reference — Lucy 2.5 repaints every frame in under a second.`
+   - With: `Create your reality in realtime with Zap! Built for streamers, digital shop sellers, and wizards looking to bend their reality.`
 
-2. **`src/components/zap/LandingHero.tsx`** — replace the `<h1>Your webcam is the timeline.</h1>` block with a fixed-height container hosting `<ASCIIText text="Zap!" enableWaves asciiFontSize={8} planeBaseHeight={8} />`. Keep the eyebrow, subcopy, CTA, and Strands untouched.
-   - Container: `relative z-10 h-[280px] md:h-[360px] w-full max-w-4xl` so the ASCII canvas has real width/height (it measures via `getBoundingClientRect`).
-   - Add `sr-only` H1 with "Zap Live — realtime video editor" for SEO/a11y since ASCIIText is canvas-only.
+2. **Add GhostCursor component** as a site-wide cursor effect on the homepage
+   - Create `src/components/reactbits/GhostCursor.tsx` (verbatim from the spec, converted with proper TS-friendly JSX)
+   - Create `src/components/reactbits/GhostCursor.css` (verbatim)
+   - Mount it in `LandingHero.tsx` as a full-viewport fixed overlay wrapper so the ghost trail follows the cursor across the whole landing page (above LiquidEther background, below interactive content). Use `position: fixed; inset: 0; pointer-events: none; z-index: 40` on the wrapper, and pass the spec's default props (color `#B497CF`, brightness `1`, trailLength `50`, inertia `0.5`, bloom + grain defaults, `mixBlendMode: 'screen'`).
 
-3. **`src/routes/__root.tsx`** — add IBM Plex Mono preconnect + stylesheet link (weights 500;600).
+3. `three` is already installed — no new dependencies.
 
-## Guardrails
-- Frontend only. No changes to session/transport/DB.
-- Keep hero vertical rhythm — ASCIIText slot sized so the CTA doesn't reflow.
+No changes to `/` route logic, session flow, or Lucy transport.
