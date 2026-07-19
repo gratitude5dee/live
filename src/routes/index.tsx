@@ -489,8 +489,12 @@ function StagePage() {
         slowStreak = Math.max(0, slowStreak - 1);
       }
 
-      if (frame % everyN === 0 && inputVideoRef.current.readyState >= 2) {
-        const ts = performance.now();
+      if (
+        frame % everyN === 0 &&
+        inputVideoRef.current.readyState >= 2 &&
+        inputVideoRef.current.videoWidth > 0
+      ) {
+        const ts = Math.round(performance.now());
         try {
           if (gestureRef.current && engineRef.current) {
             const result = gestureRef.current.recognizeForVideo(
@@ -505,7 +509,7 @@ function StagePage() {
         }
         try {
           if (faceRef.current && faceEngineRef.current) {
-            const fr = faceRef.current.detectForVideo(inputVideoRef.current, ts + 0.1);
+            const fr = faceRef.current.detectForVideo(inputVideoRef.current, ts + 1);
             faceEngineRef.current.ingest(fr);
           }
         } catch (e) {
