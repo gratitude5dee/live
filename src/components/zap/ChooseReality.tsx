@@ -33,6 +33,19 @@ export default function ChooseReality({ onEnter, disabled }: ChooseRealityProps)
   const items = useMemo(() => presets.map((p) => p.name), [presets]);
   const active = presets[idx];
 
+  // Preload neighbor thumbnails so switching feels instant
+  useEffect(() => {
+    if (!presets.length) return;
+    [idx - 1, idx + 1].forEach((i) => {
+      const p = presets[(i + presets.length) % presets.length];
+      const url = (p as any)?.thumbnail_url;
+      if (url) {
+        const img = new Image();
+        img.src = url;
+      }
+    });
+  }, [idx, presets]);
+
   const zap = () => {
     if (active) {
       try {
@@ -62,7 +75,7 @@ export default function ChooseReality({ onEnter, disabled }: ChooseRealityProps)
       />
 
       <div className="mx-auto max-w-7xl px-6">
-        <div className="mb-14 flex flex-col items-center text-center">
+        <div className="mb-16 flex flex-col items-center text-center">
           <span className="mb-4 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.28em] text-white/70 backdrop-blur">
             Presets
           </span>
@@ -78,63 +91,53 @@ export default function ChooseReality({ onEnter, disabled }: ChooseRealityProps)
           </p>
         </div>
 
-        <div className="grid grid-cols-1 items-center gap-10 md:grid-cols-2">
+        <div className="grid grid-cols-1 items-center gap-16 md:grid-cols-2 md:gap-10">
           {/* Wheel */}
-          <div className="relative h-[520px] w-full">
+          <div className="relative mx-auto h-[600px] w-full max-w-lg">
+            {/* Soft radial vignette behind wheel */}
             <div
-              className="pointer-events-none absolute inset-y-0 left-0 w-24 z-10"
+              className="pointer-events-none absolute inset-0"
               style={{
                 background:
-                  "linear-gradient(to right, #050505 20%, transparent)",
-              }}
-            />
-            <div
-              className="pointer-events-none absolute inset-x-0 top-0 h-24 z-10"
-              style={{
-                background:
-                  "linear-gradient(to bottom, #050505, transparent)",
-              }}
-            />
-            <div
-              className="pointer-events-none absolute inset-x-0 bottom-0 h-24 z-10"
-              style={{
-                background: "linear-gradient(to top, #050505, transparent)",
+                  "radial-gradient(ellipse at 20% 50%, rgba(103,232,249,0.08), transparent 60%)",
               }}
             />
             <OptionWheel
               items={items}
               defaultSelected={0}
               side="left"
-              fontSize={2.6}
-              spacing={1.5}
+              fontSize={3.2}
+              spacing={1.55}
               curve={1.1}
-              tilt={7}
-              blur={1.6}
-              fade={0.28}
-              inset={40}
+              tilt={8}
+              blur={1.2}
+              fade={0.26}
+              inset={56}
               smoothing={220}
+              loop
               activeColor="#ffffff"
               textColor="#3f3f46"
               onChange={(i) => setIdx(i)}
             />
           </div>
 
-          {/* Preview card */}
+          {/* Preview card — Double-Bezel */}
           <div className="flex justify-center">
-            <div className="relative w-full max-w-sm">
+            <div className="w-full max-w-sm rounded-[2.25rem] bg-white/[0.04] p-1.5 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9)] ring-1 ring-white/10">
               <div
-                className="relative overflow-hidden rounded-3xl border border-white/10 bg-black shadow-[0_30px_80px_-20px_rgba(0,0,0,0.9)]"
+                className="relative overflow-hidden rounded-[calc(2.25rem-0.375rem)] bg-black shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                 style={{ aspectRatio: "9 / 16" }}
               >
                 {active && (active as any).thumbnail_url && (
                   <img
+                    key={(active as any).thumbnail_url}
                     src={(active as any).thumbnail_url}
                     alt={active.name}
-                    className="absolute inset-0 h-full w-full object-cover transition-opacity duration-500"
+                    className="absolute inset-0 h-full w-full animate-[fade-in_0.5s_ease-out] object-cover"
                   />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent" />
-                <div className="absolute left-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-2xl backdrop-blur ring-1 ring-white/15">
+                <div className="absolute left-4 top-4 flex h-11 w-11 items-center justify-center rounded-full bg-black/70 text-2xl ring-1 ring-white/15 backdrop-blur">
                   {active?.emoji ?? "✨"}
                 </div>
                 <div className="absolute inset-x-0 bottom-0 p-6">
@@ -147,10 +150,10 @@ export default function ChooseReality({ onEnter, disabled }: ChooseRealityProps)
                   <button
                     onClick={zap}
                     disabled={disabled}
-                    className="group mt-5 flex w-full items-center justify-between rounded-full border border-white/15 bg-white/95 px-5 py-3 text-sm font-semibold text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_10px_30px_rgba(0,0,0,0.35)] transition hover:bg-white disabled:opacity-50"
+                    className="group mt-5 flex w-full items-center justify-between rounded-full border border-white/15 bg-white/95 px-5 py-3 text-sm font-semibold text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_10px_30px_rgba(0,0,0,0.35)] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white active:scale-[0.98] disabled:opacity-50"
                   >
                     <span>{disabled ? "Loading…" : "Zap this reality"}</span>
-                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black text-white transition-transform group-hover:translate-x-0.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-full bg-black text-white transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:translate-x-0.5 group-hover:-translate-y-[1px]">
                       <svg
                         width="12"
                         height="12"
