@@ -130,19 +130,71 @@ function StagePage() {
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStopScheduledRef = useRef(false);
 
-  // Pick raw camera vs compositor for the outbound video track based on
-  // the active preset kind, and hot-swap via replaceTrack (no renegotiate).
+  // --- Depth (WebGPU) state ---
+  const [depthOn, setDepthOn] = useState(false);
+  const [depthLoading, setDepthLoading] = useState(false);
+  const [depthProgress, setDepthProgress] = useState(0);
+  const [depthAvailable] = useState(() => DepthEngine.webgpuAvailable());
+  const depthOnRef = useRef(false);
+  const depthEngineRef = useRef<DepthEngine | null>(null);
+
+  // Pick raw camera / compositor / depth for the outbound video track based on
+  // active preset kind + depth toggle, and hot-swap via replaceTrack.
   const syncOutboundSource = useCallback(() => {
     const transport = transportRef.current;
     if (!transport) return;
-    const kind = activePresetKindRef.current;
-    const useComposite = kind === "character_swap" || kind === "gesture_fx";
-    const src = useComposite
-      ? compositorRef.current?.stream ?? inputStreamRef.current
-      : inputStreamRef.current;
+    let src: MediaStream | null = null;
+    if (depthOnRef.current && depthEngineRef.current) {
+      src = depthEngineRef.current.stream;
+    } else {
+      const kind = activePresetKindRef.current;
+      const useComposite = kind === "character_swap" || kind === "gesture_fx";
+      src = useComposite
+        ? compositorRef.current?.stream ?? inputStreamRef.current
+        : inputStreamRef.current;
+    }
     const track = src?.getVideoTracks()[0] ?? null;
     if (track) void transport.replaceVideoTrack(track);
   }, []);
+
+  const toggleDepth = useCallback(async () => {
+    if (!depthAvailable) {
+      toast.error("WebGPU not available in this browser");
+      return;
+    }
+    if (depthOnRef.current) {
+      depthOnRef.current = false;
+      setDepthOn(false);
+      depthEngineRef.current?.stop();
+      depthEngineRef.current = null;
+      syncOutboundSource();
+      return;
+    }
+    try {
+      setDepthLoading(true);
+      setDepthProgress(0);
+      const engine = new DepthEngine();
+      await engine.init((p) => {
+        if (typeof p.progress === "number") setDepthProgress(Math.round(p.progress));
+      });
+      const src = inputVideoRef.current;
+      if (src) engine.attach(src);
+      depthEngineRef.current = engine;
+      depthOnRef.current = true;
+      setDepthOn(true);
+      syncOutboundSource();
+      toast.success("Depth stream engaged");
+    } catch (err) {
+      if (err instanceof WebGPUUnsupportedError) {
+        toast.error("WebGPU not available");
+      } else {
+        toast.error("Depth model failed to load");
+        console.error(err);
+      }
+    } finally {
+      setDepthLoading(false);
+    }
+  }, [depthAvailable, syncOutboundSource]);
 
 
 
