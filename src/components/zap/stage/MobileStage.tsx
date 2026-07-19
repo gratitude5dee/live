@@ -1,7 +1,7 @@
 import SpecularButton from "@/components/reactbits/SpecularButton";
 import type { StageViewProps } from "./types";
 import type { TemplateKey } from "@/lib/zap/prompt-templates";
-import wzrdLogo from "@/assets/wzrdlogo.png";
+import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
 import { useState } from "react";
 
 export default function MobileStage(p: StageViewProps) {
@@ -46,7 +46,7 @@ export default function MobileStage(p: StageViewProps) {
       >
         <div className="flex items-center gap-2">
           <div className="rounded-full border border-white/10 bg-black/60 px-2.5 py-1 backdrop-blur-xl">
-            <img src={wzrdLogo} alt="WZRD" className="h-4 w-auto" />
+            <img src={wzrdLogo.url} alt="WZRD" className="h-4 w-auto" />
           </div>
           {p.perfMode && (
             <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-2 py-1 text-[9px] uppercase tracking-widest text-amber-200 backdrop-blur-xl">
