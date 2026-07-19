@@ -8,6 +8,7 @@ import { GestureEngine, type GestureAction } from "@/lib/zap/gesture-engine";
 import { FaceEngine, type FaceAction } from "@/lib/zap/face-engine";
 import { VisionBuffer } from "@/lib/zap/vision-buffer";
 import { drawHandOverlay, drawFaceOverlay } from "@/lib/zap/overlay";
+import { CompositeStream } from "@/lib/zap/composite-stream";
 import { loadGestureRecognizer, loadFaceLandmarker } from "@/lib/zap/mediapipe";
 import LandingHero from "@/components/zap/LandingHero";
 import TemplateDialog, { type TemplateApplyPayload } from "@/components/zap/TemplateDialog";
@@ -93,6 +94,7 @@ function StagePage() {
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const inputStreamRef = useRef<MediaStream | null>(null);
   const outputStreamRef = useRef<MediaStream | null>(null);
+  const compositorRef = useRef<CompositeStream | null>(null);
   const transportRef = useRef<VideoTransport | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -460,6 +462,8 @@ function StagePage() {
     visionBufRef.current = null;
     inputStreamRef.current?.getTracks().forEach((t) => t.stop());
     inputStreamRef.current = null;
+    compositorRef.current?.stop();
+    compositorRef.current = null;
     outputStreamRef.current = null;
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
@@ -585,9 +589,47 @@ function StagePage() {
 
       runInferenceLoop();
 
+      // Build a composited MediaStream (webcam + baked-in MediaPipe overlays)
+      // so Lucy repaints frames that already carry the landmark hints.
+      // Falls back to the raw camera stream if the browser can't captureStream.
+      let outboundStream: MediaStream = stream;
+      try {
+        const src = inputVideoRef.current;
+        if (src) {
+          // Ensure the source video has dimensions before we start reading it.
+          if (src.readyState < 2) {
+            await new Promise<void>((resolve) => {
+              const onReady = () => {
+                src.removeEventListener("loadedmetadata", onReady);
+                resolve();
+              };
+              src.addEventListener("loadedmetadata", onReady, { once: true });
+              // Safety timeout — never block session start on this.
+              setTimeout(resolve, 800);
+            });
+          }
+          const compositor = new CompositeStream(
+            src,
+            (ctx, _w, _h) => {
+              drawHandOverlay(
+                ctx,
+                lastGestureResultRef.current,
+                lastHoldRef.current,
+              );
+              drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+            },
+            30,
+          );
+          compositorRef.current = compositor;
+          outboundStream = compositor.stream;
+        }
+      } catch (e) {
+        console.warn("compositor unavailable, sending raw camera to Lucy", e);
+      }
+
       // Start fal
       setConnState("connecting");
-      const t = new VideoTransport(stream, {
+      const t = new VideoTransport(outboundStream, {
         onOutputStream: (out) => {
           outputStreamRef.current = out;
           if (outputVideoRef.current) {
@@ -963,6 +1005,7 @@ function StagePage() {
       gestureRef.current?.close();
       faceRef.current?.close();
       visionBufRef.current?.stop();
+      compositorRef.current?.stop();
       inputStreamRef.current?.getTracks().forEach((t) => t.stop());
       if (channelRef.current) supabase.removeChannel(channelRef.current);
       endSession();
