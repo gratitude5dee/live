@@ -671,7 +671,12 @@ function StagePage() {
 
   // --- Record / snapshot / upload ---
   const uploadTake = useCallback(
-    async (blob: Blob, kind: "video" | "snapshot", durationMs?: number) => {
+    async (
+      blob: Blob,
+      kind: "video" | "snapshot",
+      durationMs?: number,
+      opts?: { autoDownload?: boolean },
+    ) => {
       const uid = userIdRef.current;
       const sid = sessionIdRef.current;
       if (!uid || !sid) return;
@@ -680,13 +685,15 @@ function StagePage() {
       const filename = `take-${Date.now()}.${ext}`;
       const path = `${uid}/${sid}/${filename}`;
 
-      // Immediate local download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const autoDownload = opts?.autoDownload ?? true;
+      if (autoDownload) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
 
       setPendingUpload((n) => n + 1);
       const { error: upErr } = await supabase.storage
