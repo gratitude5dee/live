@@ -306,6 +306,9 @@ function StagePage() {
       }
       const ref = { dataUri: payload.dataUri, path };
       setRefImage(ref);
+      // Templates (object add-in, try-on, object replace) rely on the ref
+      // image, not on baked landmarks — send Lucy a clean camera frame.
+      activePresetKindRef.current = "other";
       await applyPrompt(payload.prompt, "preset", ref);
       toast.success("Applied");
     },
