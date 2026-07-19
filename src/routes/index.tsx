@@ -1052,6 +1052,15 @@ function StagePage() {
               {String(Math.floor((remainingMs / 1000) % 60)).padStart(2, "0")}
             </span>
           )}
+          {download && (
+            <a
+              href={download.url}
+              download={download.filename}
+              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20"
+            >
+              ⬇ Download take
+            </a>
+          )}
           <button
             onClick={() => void stopSession("manual")}
             className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 transition hover:bg-red-500/20"
