@@ -256,9 +256,10 @@ function StagePage() {
     setPrevApplied(applied);
     setApplied(null);
     activePresetKindRef.current = "other";
+    syncOutboundSource();
     transportRef.current.send({ prompt: "", enable_prompt_expansion: false });
     await logPromptEvent("clear", "gesture", null);
-  }, [applied, logPromptEvent]);
+  }, [applied, logPromptEvent, syncOutboundSource]);
 
   const presetRefCache = useRef<Map<string, { dataUri: string; path: string }>>(new Map());
 
