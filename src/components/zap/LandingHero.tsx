@@ -3,6 +3,7 @@ import Strands from "@/components/reactbits/Strands";
 import GlassSurface from "@/components/reactbits/GlassSurface";
 import BubbleMenu from "@/components/reactbits/BubbleMenu";
 import ChooseReality from "@/components/zap/ChooseReality";
+import ModesSection from "@/components/zap/ModesSection";
 import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
 
 interface LandingHeroProps {
@@ -161,6 +162,9 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
 
       {/* Choose your reality */}
       <ChooseReality onEnter={onEnter} disabled={disabled} />
+
+      {/* Modes — curved ring of edit modes */}
+      <ModesSection />
     </div>
   );
 }
