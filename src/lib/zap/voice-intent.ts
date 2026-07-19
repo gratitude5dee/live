@@ -2,7 +2,7 @@
  * Computah — voice intent constants. Pure data; safe to import client + server.
  */
 
-export const OPENAI_REALTIME_MODEL = "gpt-realtime-2-mini";
+export const OPENAI_REALTIME_MODEL = "gpt-realtime";
 export const COMPUTAH_VOICE = "cedar";
 
 export const WAKE_WORD_RE = /comput(ah|er|a)/i;
