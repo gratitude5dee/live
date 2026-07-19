@@ -767,6 +767,24 @@ function StagePage() {
         ? "bg-red-500"
         : "bg-amber-500";
 
+  if (connState === "idle") {
+    return (
+      <>
+        <LandingHero
+          onEnter={() => {
+            if (authReady) startSession();
+          }}
+          disabled={!authReady}
+        />
+        {error && (
+          <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200 backdrop-blur">
+            {error}
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-[#FAFAFA]">
       {/* Header */}
