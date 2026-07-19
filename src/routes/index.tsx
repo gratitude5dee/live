@@ -1012,22 +1012,19 @@ function StagePage() {
               {recording ? "■ Stop" : "⬤ Record"}
             </SpecularButton>
           )}
-          {connState !== "idle" && (
-            <>
-              {remainingMs !== null && (
-                <span className="rounded-full border border-[#2A2A35] bg-[#16161D] px-2.5 py-1 font-mono text-xs tabular-nums text-[#9CA3AF]">
-                  {Math.floor(remainingMs / 1000 / 60)}:
-                  {String(Math.floor((remainingMs / 1000) % 60)).padStart(2, "0")}
-                </span>
-              )}
-              <button
-                onClick={() => void stopSession("manual")}
-                className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 transition hover:bg-red-500/20"
-              >
-                Disconnect
-              </button>
-            </>
+          {remainingMs !== null && (
+            <span className="rounded-full border border-[#2A2A35] bg-[#16161D] px-2.5 py-1 font-mono text-xs tabular-nums text-[#9CA3AF]">
+              {Math.floor(remainingMs / 1000 / 60)}:
+              {String(Math.floor((remainingMs / 1000) % 60)).padStart(2, "0")}
+            </span>
           )}
+          <button
+            onClick={() => void stopSession("manual")}
+            className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 transition hover:bg-red-500/20"
+          >
+            Disconnect
+          </button>
+
         </div>
 
       </header>
