@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import OptionWheel from "@/components/reactbits/OptionWheel";
+import ShinyText from "@/components/reactbits/ShinyText";
 import type { Preset } from "@/lib/zap/types";
 
 interface ChooseRealityProps {
