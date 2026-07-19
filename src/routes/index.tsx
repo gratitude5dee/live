@@ -72,6 +72,9 @@ function StagePage() {
   const [perfMode, setPerfMode] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(0);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  const [download, setDownload] = useState<{ url: string; filename: string } | null>(null);
+  const autoRecordRef = useRef(false);
+  const startRecordingRef = useRef<((auto: boolean) => void) | null>(null);
 
 
 
@@ -431,7 +434,7 @@ function StagePage() {
     setConnState("requesting_camera");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 1280, height: 720, frameRate: 30 },
+        video: { width: { ideal: 720 }, height: { ideal: 1280 }, aspectRatio: { ideal: 9 / 16 }, frameRate: 30 },
         audio: false,
       });
       inputStreamRef.current = stream;
@@ -522,6 +525,12 @@ function StagePage() {
             outputVideoRef.current.play().catch(() => {});
           }
           setConnState("live");
+          // Auto-start recording in 9:16 as soon as Lucy is live
+          setDownload((d) => {
+            if (d) URL.revokeObjectURL(d.url);
+            return null;
+          });
+          setTimeout(() => startRecordingRef.current?.(true), 50);
           if (!autoStopScheduledRef.current) {
             autoStopScheduledRef.current = true;
             const AUTO_STOP_MS = 90_000;
@@ -669,7 +678,12 @@ function StagePage() {
 
   // --- Record / snapshot / upload ---
   const uploadTake = useCallback(
-    async (blob: Blob, kind: "video" | "snapshot", durationMs?: number) => {
+    async (
+      blob: Blob,
+      kind: "video" | "snapshot",
+      durationMs?: number,
+      opts?: { autoDownload?: boolean },
+    ) => {
       const uid = userIdRef.current;
       const sid = sessionIdRef.current;
       if (!uid || !sid) return;
@@ -678,13 +692,15 @@ function StagePage() {
       const filename = `take-${Date.now()}.${ext}`;
       const path = `${uid}/${sid}/${filename}`;
 
-      // Immediate local download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const autoDownload = opts?.autoDownload ?? true;
+      if (autoDownload) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
 
       setPendingUpload((n) => n + 1);
       const { error: upErr } = await supabase.storage
@@ -726,14 +742,11 @@ function StagePage() {
     }, "image/png");
   }, [uploadTake]);
 
-  const toggleRecord = useCallback(() => {
-    if (recording) {
-      recorderRef.current?.stop();
-      return;
-    }
+  const startRecording = useCallback((auto: boolean) => {
+    if (recorderRef.current?.state === "recording") return;
     const s = outputStreamRef.current;
     if (!s) {
-      toast.error("Live stream not ready");
+      if (!auto) toast.error("Live stream not ready");
       return;
     }
     chunksRef.current = [];
@@ -741,22 +754,43 @@ function StagePage() {
       ? "video/webm;codecs=vp9"
       : "video/webm;codecs=vp8";
     const rec = new MediaRecorder(s, { mimeType });
+    autoRecordRef.current = auto;
     rec.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
     rec.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" });
       const dur = Math.round(performance.now() - recordStartRef.current);
-      uploadTake(blob, "video", dur);
+      const wasAuto = autoRecordRef.current;
+      const filename = `zap-live-${Date.now()}.webm`;
+      if (wasAuto) {
+        const url = URL.createObjectURL(blob);
+        setDownload({ url, filename });
+      }
+      uploadTake(blob, "video", dur, { autoDownload: !wasAuto });
       setRecording(false);
     };
     recordStartRef.current = performance.now();
     rec.start(1000);
     recorderRef.current = rec;
     setRecording(true);
-    // Auto-stop at 10 min
-    setTimeout(() => {
-      if (recorderRef.current?.state === "recording") recorderRef.current.stop();
-    }, 10 * 60 * 1000);
-  }, [recording, uploadTake]);
+    // Auto-stop at 10 min for manual records
+    if (!auto) {
+      setTimeout(() => {
+        if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+      }, 10 * 60 * 1000);
+    }
+  }, [uploadTake]);
+
+  useEffect(() => {
+    startRecordingRef.current = startRecording;
+  }, [startRecording]);
+
+  const toggleRecord = useCallback(() => {
+    if (recording) {
+      recorderRef.current?.stop();
+      return;
+    }
+    startRecording(false);
+  }, [recording, startRecording]);
 
   // Keep appliedRef in sync
   useEffect(() => {
@@ -1018,6 +1052,15 @@ function StagePage() {
               {String(Math.floor((remainingMs / 1000) % 60)).padStart(2, "0")}
             </span>
           )}
+          {download && (
+            <a
+              href={download.url}
+              download={download.filename}
+              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20"
+            >
+              ⬇ Download take
+            </a>
+          )}
           <button
             onClick={() => void stopSession("manual")}
             className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 transition hover:bg-red-500/20"
@@ -1038,7 +1081,7 @@ function StagePage() {
       {/* Stage */}
       <main className="relative mx-auto max-w-6xl p-4">
         {(
-          <div className="relative aspect-video overflow-hidden rounded-2xl border border-[#2A2A35] bg-black">
+          <div className="relative mx-auto aspect-[9/16] max-h-[calc(100vh-220px)] w-auto overflow-hidden rounded-2xl border border-[#2A2A35] bg-black">
 
             <video
               ref={attachOutputVideo}
