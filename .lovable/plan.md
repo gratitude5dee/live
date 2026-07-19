@@ -1,45 +1,51 @@
-## Problem
+## Current state
 
-1. **Quality regression**: Character-swap presets route through `CompositeStream` (offscreen canvas at 1080×1920, 30fps, `captureStream`) so face landmarks can be baked into the frame. That extra re-encode softens the feed vs. the native `getUserMedia` track — visible in screenshot #1 (`COMPOSITE` badge, muddy skin detail). Gesture-FX ("Fire Hands") is the same path. All other presets already send the raw track and look sharper.
-2. **Ref image UX**: The tiny thumbnail next to the ✨Enhance / 🖼️Ref chips (red circle in screenshot #2) is a static `<img>` — no way to replace or delete without opening the file picker + no visible affordance to remove.
+- `MobileStage.tsx` already renders a ⇋ button that calls `flipCamera`.
+- `flipCamera` in `src/routes/index.tsx` toggles `facingMode` between `"user"` and `"environment"`, but does it by calling `stopSession("manual")` + `startSession()` after 200ms. That tears down the Lucy session, resets the 90s timer, drops any applied prompt, and shows the "Connecting to Lucy" spinner — not a clean camera switch.
+- The button icon (⇋) and its purpose aren't obvious on mobile.
 
-## Fix
+## Goal
 
-### A. Default character_swap + gesture_fx to the raw camera track
+On mobile, tapping the camera-flip button should switch between the front (`user`) and back (`environment`) camera **without disconnecting Lucy** — the live stream keeps running, the 90s timer keeps ticking, applied prompts stay applied, and the new camera feed hot-swaps into both the local PiP and the outbound WebRTC track.
 
-- In `src/routes/index.tsx`, add a `bakeLandmarksRef` (default `false`) that gates whether Character Swap / Gesture FX use the compositor. When off, `syncOutboundSource` sends `inputStreamRef.current` (raw 1080p track) for *all* preset kinds — matching the "clean camera" path. When on, it uses the compositor as today.
-- Expose a small "Landmarks" pill toggle in the camera PiP header (next to `DEPTH`) in both `DesktopStage.tsx` and `MobileStage.tsx`. Hidden unless the active preset kind is `character_swap` or `gesture_fx`. Persist choice in `sessionStorage`.
-- Update the `activeSource` badge accordingly (`RAW` becomes the default label after this change).
-- Keep the compositor code path intact; just don't spin it up unless the user opts in.
+## Plan
 
-Rationale: Lucy re-identifies from the reference image; baked face wireframes are a nice-to-have, not required, and their cost is a global quality hit users notice more than the identity boost.
+### 1. Hot-swap the camera stream (`src/routes/index.tsx`)
 
-### B. Make the ref-image chip directly editable
+Rewrite `flipCamera` to:
 
-In `DesktopStage.tsx` (and mirror in `MobileStage.tsx` composer), replace the static thumbnail with a compact control group:
+1. Toggle `facingMode` state.
+2. Call `getUserMedia` with the new `facingMode` using the same constraint block already used by `startSession` (keep 1080×1920 desktop / mobile-optimized constraints — reuse the existing helper or extract it into a local `buildCameraConstraints(facingMode, isMobile)` so both paths stay in sync).
+3. Stop the old input tracks (`inputStreamRef.current?.getTracks().forEach(t => t.stop())`) **after** the new stream is ready.
+4. Update `inputStreamRef.current` and reattach it to the `<video>` element via the existing `attachInputVideo` callback path (assign `srcObject`).
+5. If the compositor is running (`compositeStreamRef`), swap the new stream in via its existing input setter (or reinit the compositor with the new source).
+6. If depth is on, restart `depthEngineRef` against the new stream (await its first-frame promise before swap).
+7. Call `syncOutboundSource()` so the outbound WebRTC sender uses the new video track without renegotiating (`RTCRtpSender.replaceTrack(newTrack)` — already the mechanism `syncOutboundSource` uses).
+8. Re-run MediaPipe engines against the new video element if they hold a stream reference.
 
-```
-[🖼️ Ref]  →  when refImage present:
-   ┌────────────┐
-   │  thumb  ×  │   ← click thumb = re-open file picker (replace)
-   └────────────┘        × button = clear ref
-```
+No `stopSession` / `startSession` involved. The Lucy WebSocket, peer connection, applied prompt, ref image, recording MediaRecorder, and countdown all remain intact.
 
-- Wrap the thumbnail in a `<label htmlFor="ref-file">` so clicking it re-opens the same hidden `<input type="file">` (replace).
-- Add an `×` button overlaid top-right of the thumb that calls a new `clearRefImage` prop.
-- Add a `clearRefImage` handler in `src/routes/index.tsx` that sets `refImage` to `null` and re-applies the current prompt without a ref (so Lucy immediately drops the reference).
-- Extend `StageViewProps` in `src/components/zap/stage/types.ts` with `clearRefImage: () => void` and the new landmarks toggle props (`bakeLandmarks`, `toggleBakeLandmarks`, `landmarksAvailable`).
-- Hide the 🖼️Ref upload chip once a ref is present (the thumbnail becomes the interactive control) to declutter.
+### 2. Handle failures gracefully
 
-### C. Mirror on mobile
+- If `getUserMedia` for the new `facingMode` throws (e.g. device has no back camera), keep the old stream, revert `facingMode`, and surface a small toast/error: "No back camera available".
+- Disable the flip button briefly (`flipping` state) while the swap is in flight so double-taps don't stack.
 
-Apply the same landmarks toggle + ref chip changes in `MobileStage.tsx` so both surfaces behave identically.
+### 3. Polish the mobile button
+
+In `src/components/zap/stage/MobileStage.tsx`:
+
+- Replace the ⇋ glyph with a clearer camera-flip icon (e.g. lucide `SwitchCamera` — already available via existing lucide imports pattern) and keep `aria-label="Flip camera"`.
+- Add a tiny label pill under/next to it showing the current facing (`FRONT` / `BACK`) so users know the state at a glance. Keep it in the top-right chip cluster to match existing spacing.
+- Show a subtle spinner on the button while `flipping` is true.
+
+### 4. Desktop parity (optional but tiny)
+
+`DesktopStage.tsx` also exposes `flipCamera` — it'll benefit from the same hot-swap automatically since the logic lives in `index.tsx`. No UI change needed there unless you want it; leaving desktop alone keeps this PR focused.
 
 ## Files touched
 
-- `src/routes/index.tsx` — add `bakeLandmarksRef` + toggle, update `syncOutboundSource`, add `clearRefImage`, wire new props through to stage views.
-- `src/components/zap/stage/types.ts` — new props.
-- `src/components/zap/stage/DesktopStage.tsx` — PiP landmarks toggle, replace ref thumbnail with replace/remove control.
-- `src/components/zap/stage/MobileStage.tsx` — same two changes.
+- `src/routes/index.tsx` — rewrite `flipCamera` to hot-swap tracks; add `flipping` state; extract shared camera-constraints helper if needed.
+- `src/components/zap/stage/MobileStage.tsx` — icon + FRONT/BACK label + disabled state during flip.
+- `src/components/zap/stage/types.ts` — add `flipping: boolean` to `StageViewProps` (optional, only if surfacing spinner).
 
-No schema, transport, or fal-token changes.
+No schema, transport protocol, or fal-token changes.
