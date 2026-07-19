@@ -627,10 +627,9 @@ function StagePage() {
 
       runInferenceLoop();
 
-      // Build a composited MediaStream (webcam + baked-in MediaPipe overlays)
-      // so Lucy repaints frames that already carry the landmark hints.
-      // Falls back to the raw camera stream if the browser can't captureStream.
-      let outboundStream: MediaStream = stream;
+      // Build the compositor eagerly so we can hot-swap to it the moment a
+      // Character Swap / Gesture FX preset activates. By default we send the
+      // raw camera track to Lucy for maximum quality (no canvas re-encode).
       try {
         const src = inputVideoRef.current;
         if (src) {
@@ -649,10 +648,7 @@ function StagePage() {
           const compositor = new CompositeStream(
             src,
             (ctx, _w, _h) => {
-              // Send a clean, center-cropped 9:16 stream to Lucy. Bake the
-              // face mesh only for character-swap presets (identity lock) and
-              // bake hand landmarks only for gesture-FX presets (effect
-              // anchoring). Everything else sends a clean webcam frame.
+              // Only bake landmarks when the active preset opts in.
               // The on-screen PiP still shows both overlays for user feedback.
               const kind = activePresetKindRef.current;
               if (kind === "character_swap") {
@@ -664,15 +660,17 @@ function StagePage() {
             { fps: 30, targetAspect: 9 / 16, targetHeight: 1920 },
           );
           compositorRef.current = compositor;
-          outboundStream = compositor.stream;
         }
       } catch (e) {
-        console.warn("compositor unavailable, sending raw camera to Lucy", e);
+        console.warn("compositor unavailable — clean camera only", e);
       }
 
-      // Start fal
+      // Start fal — always begin with the raw camera track. If a preset kind
+      // is active, syncOutboundSource() will swap in the compositor track
+      // without renegotiating SDP.
       setConnState("connecting");
-      const t = new VideoTransport(outboundStream, {
+      const t = new VideoTransport(stream, {
+
         onOutputStream: (out) => {
           outputStreamRef.current = out;
           if (outputVideoRef.current) {
