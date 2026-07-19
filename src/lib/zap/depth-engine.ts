@@ -190,6 +190,19 @@ export class DepthEngine {
     this.ctx.imageSmoothingEnabled = true;
     this.ctx.imageSmoothingQuality = "high";
     this.ctx.drawImage(tmp, ox, oy, outW, outH);
+    if (this.firstFrameResolve) {
+      this.firstFrameResolve();
+      this.firstFrameResolve = null;
+    }
+  }
+
+  waitForFirstFrame(timeoutMs = 4000): Promise<void> {
+    return Promise.race([
+      this.firstFrame,
+      new Promise<void>((_, rej) =>
+        setTimeout(() => rej(new Error("depth first frame timeout")), timeoutMs),
+      ),
+    ]);
   }
 
   stop() {
