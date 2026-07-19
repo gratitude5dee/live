@@ -234,7 +234,7 @@ function StagePage() {
       const kind = source === "preset" ? "preset" : "apply";
       await logPromptEvent(kind, source, next);
     },
-    [applied, enhance, logPromptEvent],
+    [applied, enhance, logPromptEvent, syncOutboundSource],
   );
 
   const undo = useCallback(async () => {
