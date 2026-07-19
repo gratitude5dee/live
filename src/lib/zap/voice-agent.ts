@@ -39,6 +39,7 @@ export class VoiceAgent {
   private audioEl: HTMLAudioElement | null = null;
   private idleTimer: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
+  private dispatchedCallIds = new Set<string>();
   private model = OPENAI_REALTIME_MODEL;
 
   constructor(cb: VoiceCallbacks) {
