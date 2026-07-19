@@ -194,11 +194,23 @@ export class VideoTransport {
           } else if (message.sdp && message.type) {
             void this.pc
               .setRemoteDescription({ type: message.type, sdp: message.sdp })
+              .then(() => {
+                this.remoteDescriptionSet = true;
+                const buf = this.pendingRemoteCandidates;
+                this.pendingRemoteCandidates = [];
+                for (const c of buf) {
+                  void this.pc?.addIceCandidate(c).catch(() => {});
+                }
+              })
               .catch((error) => this.cb.onError(error));
           } else if (message.candidate) {
-            void this.pc
-              .addIceCandidate(message.candidate)
-              .catch((error) => this.cb.onError(error));
+            if (!this.remoteDescriptionSet) {
+              this.pendingRemoteCandidates.push(message.candidate);
+            } else {
+              void this.pc
+                .addIceCandidate(message.candidate)
+                .catch((error) => this.cb.onError(error));
+            }
           }
         },
         onError: (error) => this.cb.onError(error),
