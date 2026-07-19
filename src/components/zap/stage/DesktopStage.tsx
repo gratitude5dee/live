@@ -73,7 +73,14 @@ export default function DesktopStage(p: StageViewProps) {
       {/* Top bar */}
       <header className="fixed inset-x-0 top-0 z-20 flex items-center justify-between px-8 py-5">
         <div className="flex items-center gap-4">
-          <img src={wzrdLogo.url} alt="WZRD" className="h-8 w-auto opacity-90" />
+          <a
+            href="https://wzrd.tech"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="WZRD.tech"
+          >
+            <img src={wzrdLogo.url} alt="WZRD" className="h-8 w-auto opacity-90 transition hover:opacity-100" />
+          </a>
           <div className="ml-2 flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] backdrop-blur-xl">
             <span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
             <span className="uppercase tracking-[0.14em] text-white/70">{p.connState}</span>
