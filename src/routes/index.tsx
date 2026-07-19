@@ -32,13 +32,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Your webcam is the timeline. Edit the live feed with prompts, gestures, and reference images — Lucy 2.5 repaints every frame in under a second.",
+          "Your webcam is the timeline. Edit the live feed with prompts, gestures, and reference images — Zap LIve repaints every frame in under a second.",
       },
       { property: "og:title", content: "ZAP·LIVE — realtime video editor" },
       {
         property: "og:description",
         content:
-          "Live-streaming video editor powered by Lucy 2.5. Prompts, gestures, presets — realtime.",
+          "Your webcam is the timeline. Edit the live feed with prompts, gestures, and reference images — Zap LIve repaints every frame in under a second.",
       },
     ],
   }),

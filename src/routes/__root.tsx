@@ -84,16 +84,20 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       {
         name: "description",
         content:
-          "Your webcam is the timeline. Edit the live feed with prompts, gestures, and reference images.",
+          "Your webcam is the timeline. Edit the live feed with prompts, gestures, and reference images — Zap LIve repaints every frame in under a second.",
       },
       { name: "author", content: "ZAP·LIVE" },
       { property: "og:title", content: "ZAP·LIVE — realtime video editor" },
       {
         property: "og:description",
-        content: "Realtime video editor powered by Lucy 2.5.",
+        content: "Your webcam is the timeline. Edit the live feed with prompts, gestures, and reference images — Zap LIve repaints every frame in under a second.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "ZAP·LIVE — realtime video editor" },
+      { name: "twitter:description", content: "Your webcam is the timeline. Edit the live feed with prompts, gestures, and reference images — Zap LIve repaints every frame in under a second." },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/f1909099-3727-47ec-9e9c-c818920e73c6" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/f1909099-3727-47ec-9e9c-c818920e73c6" },
     ],
 
     links: [
