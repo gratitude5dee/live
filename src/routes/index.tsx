@@ -74,6 +74,7 @@ function StagePage() {
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
   const [download, setDownload] = useState<{ url: string; filename: string } | null>(null);
   const autoRecordRef = useRef(false);
+  const startRecordingRef = useRef<((auto: boolean) => void) | null>(null);
 
 
 
