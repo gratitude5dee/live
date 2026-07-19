@@ -21,8 +21,8 @@ type LucyRealtimeConnection = {
 /**
  * Video transport for Lucy 2.5 realtime.
  *
- * Lucy uses fal's WMA bridge for the one-shot SDP exchange. Media and prompt
- * controls then flow peer-to-peer over WebRTC.
+ * Lucy uses fal's realtime WebSocket for WebRTC signaling and prompt updates.
+ * Video itself flows peer-to-peer over WebRTC.
  */
 export class VideoTransport {
   private inputStream: MediaStream;
@@ -89,6 +89,25 @@ export class VideoTransport {
         }
       };
 
+      let offerSent = false;
+      const sendOffer = async (connection: LucyRealtimeConnection) => {
+        if (offerSent || this.closed) return;
+        offerSent = true;
+        const offer = await pc.createOffer({
+          offerToReceiveVideo: true,
+          offerToReceiveAudio: false,
+        });
+        await pc.setLocalDescription(offer);
+        const sdp = pc.localDescription?.sdp;
+        if (!sdp) throw new Error("WebRTC offer was empty");
+        connection.send({ type: "offer", sdp });
+        this.connectTimeout = setTimeout(() => {
+          if (pc.connectionState !== "connected") {
+            this.cb.onError(new Error("Lucy did not establish a media connection"));
+          }
+        }, 15_000);
+      };
+
       const connection = fal.realtime.connect("decart/lucy-2-5/realtime", {
         clientOnly: true,
         tokenProvider: async (app) =>
@@ -100,13 +119,19 @@ export class VideoTransport {
             type?: RTCSdpType;
             sdp?: string;
             candidate?: RTCIceCandidateInit | null;
+            iceServers?: RTCIceServer[] | null;
             error?: unknown;
           };
           if (message.error) {
             this.cb.onError(new Error("Lucy signaling failed"));
             return;
           }
-          if (message.sdp && message.type) {
+          if (message.iceServers?.length) {
+            this.pc.setConfiguration({ iceServers: message.iceServers });
+            void sendOffer(connection as LucyRealtimeConnection).catch((error) =>
+              this.cb.onError(error),
+            );
+          } else if (message.sdp && message.type) {
             void this.pc
               .setRemoteDescription({ type: message.type, sdp: message.sdp })
               .catch((error) => this.cb.onError(error));
@@ -119,36 +144,7 @@ export class VideoTransport {
         onError: (error) => this.cb.onError(error),
       });
       this.connection = connection as LucyRealtimeConnection;
-
-      const offer = await pc.createOffer({
-        offerToReceiveVideo: true,
-        offerToReceiveAudio: false,
-      });
-      await pc.setLocalDescription(offer);
-
-      // Send a complete offer so Lucy can establish media without trickle ICE.
-      await new Promise<void>((resolve, reject) => {
-        if (pc.iceGatheringState === "complete") return resolve();
-        const timeout = setTimeout(
-          () => reject(new Error("Timed out gathering WebRTC candidates")),
-          10_000,
-        );
-        pc.onicegatheringstatechange = () => {
-          if (pc.iceGatheringState === "complete") {
-            clearTimeout(timeout);
-            resolve();
-          }
-        };
-      });
-
-      const sdp = pc.localDescription?.sdp;
-      if (!sdp) throw new Error("WebRTC offer was empty");
-      (connection as LucyRealtimeConnection).send({ type: "offer", sdp });
-      this.connectTimeout = setTimeout(() => {
-        if (pc.connectionState !== "connected") {
-          this.cb.onError(new Error("Lucy did not establish a media connection"));
-        }
-      }, 15_000);
+      (connection as LucyRealtimeConnection).send({});
     } catch (e) {
       this.cb.onError(e);
       throw e;
