@@ -88,10 +88,23 @@ export default function MobileStage(p: StageViewProps) {
           )}
           <button
             onClick={p.flipCamera}
-            aria-label="Flip camera"
-            className="grid h-8 w-8 place-items-center rounded-full border border-white/10 bg-black/60 text-sm backdrop-blur-xl active:scale-95"
+            disabled={p.flipping}
+            aria-label={`Flip camera (currently ${p.facingMode === "user" ? "front" : "back"})`}
+            className="flex items-center gap-1 rounded-full border border-white/10 bg-black/60 px-2.5 py-1 text-[10px] uppercase tracking-widest text-white/80 backdrop-blur-xl active:scale-95 disabled:opacity-50"
           >
-            ⇋
+            {p.flipping ? (
+              <span className="inline-block h-3 w-3 animate-spin rounded-full border border-white/30 border-t-white/80" />
+            ) : (
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/>
+                <path d="m13 5 3-3 3 3"/>
+                <path d="M16 2v6"/>
+                <path d="M13 19h7a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1"/>
+                <path d="m11 19-3 3-3-3"/>
+                <path d="M8 22v-6"/>
+              </svg>
+            )}
+            <span>{p.facingMode === "user" ? "Front" : "Back"}</span>
           </button>
           <button
             onClick={() => setShowQr((v) => !v)}

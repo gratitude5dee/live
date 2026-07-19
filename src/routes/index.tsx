@@ -81,6 +81,7 @@ function StagePage() {
   const [pendingUpload, setPendingUpload] = useState(0);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
   const [download, setDownload] = useState<{ url: string; filename: string } | null>(null);
+  const [flipping, setFlipping] = useState(false);
   const [templateDialog, setTemplateDialog] = useState<{
     key: TemplateKey;
     name: string;
@@ -1294,15 +1295,58 @@ function StagePage() {
     if (data) setPresets((prev) => [...prev, data]);
   };
 
+  const flippingRef = useRef(false);
   const flipCamera = useCallback(() => {
-    setFacingMode((m) => (m === "user" ? "environment" : "user"));
-    // Restart the stream on the next tick; teardown then start fresh session.
+    if (flippingRef.current) return;
+    if (!inputStreamRef.current) return;
+    flippingRef.current = true;
+    setFlipping(true);
+    const next: "user" | "environment" = facingMode === "user" ? "environment" : "user";
     void (async () => {
-      await stopSession("manual");
-      // small delay so refs clear
-      setTimeout(() => startSession(), 200);
+      const mobileCapture = typeof window !== "undefined"
+        && window.matchMedia("(max-width: 768px)").matches;
+      const videoConstraints: MediaTrackConstraints = mobileCapture
+        ? { facingMode: next, width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } }
+        : { facingMode: next, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } };
+      let newStream: MediaStream | null = null;
+      try {
+        newStream = await navigator.mediaDevices.getUserMedia({
+          video: videoConstraints,
+          audio: false,
+        });
+      } catch (e) {
+        console.warn("flipCamera getUserMedia failed", e);
+        toast.error(next === "environment" ? "No back camera available" : "Front camera unavailable");
+        flippingRef.current = false;
+        setFlipping(false);
+        return;
+      }
+      // Swap in the new stream, then stop the old tracks.
+      const old = inputStreamRef.current;
+      inputStreamRef.current = newStream;
+      if (inputVideoRef.current) {
+        inputVideoRef.current.srcObject = newStream;
+        inputVideoRef.current.play().catch(() => {});
+      }
+      old?.getTracks().forEach((t) => t.stop());
+      setFacingMode(next);
+      // If depth is running, restart it against the new video source so its
+      // internal canvas gets a fresh first frame before we swap Lucy over.
+      if (depthOnRef.current && depthEngineRef.current && inputVideoRef.current) {
+        try {
+          depthEngineRef.current.attach(inputVideoRef.current);
+          await depthEngineRef.current.waitForFirstFrame(3000);
+        } catch (e) {
+          console.warn("depth re-attach failed", e);
+        }
+      }
+      // Compositor reads from the <video> element directly, so it picks up
+      // the new stream automatically — just resync the outbound track.
+      syncOutboundSource();
+      flippingRef.current = false;
+      setFlipping(false);
     })();
-  }, [startSession, stopSession]);
+  }, [facingMode, syncOutboundSource]);
 
   if (connState === "idle") {
     return (
@@ -1360,6 +1404,8 @@ function StagePage() {
       activePresetKindRef.current === "gesture_fx",
     savePreset,
     flipCamera,
+    flipping,
+    facingMode,
     presets,
     applyPreset: (p: Preset) => void applyPreset(p),
     openTemplate: (key: TemplateKey, name: string) => setTemplateDialog({ key, name }),
