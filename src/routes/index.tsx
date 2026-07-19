@@ -522,7 +522,25 @@ function StagePage() {
             outputVideoRef.current.play().catch(() => {});
           }
           setConnState("live");
+          if (!autoStopScheduledRef.current) {
+            autoStopScheduledRef.current = true;
+            const AUTO_STOP_MS = 90_000;
+            const deadline = Date.now() + AUTO_STOP_MS;
+            setRemainingMs(AUTO_STOP_MS);
+            countdownIntervalRef.current = setInterval(() => {
+              const left = Math.max(0, deadline - Date.now());
+              setRemainingMs(left);
+              if (left <= 0 && countdownIntervalRef.current) {
+                clearInterval(countdownIntervalRef.current);
+                countdownIntervalRef.current = null;
+              }
+            }, 250);
+            autoStopTimerRef.current = setTimeout(() => {
+              void stopSession("timeout");
+            }, AUTO_STOP_MS);
+          }
         },
+
         onTransportChosen: (mode) => {
           transportStateRef.current = mode;
           setTransport(mode);
