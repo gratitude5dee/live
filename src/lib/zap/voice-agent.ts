@@ -137,7 +137,7 @@ export class VoiceAgent {
         model: this.model,
         instructions: COMPUTAH_INSTRUCTIONS,
         tools: COMPUTAH_TOOLS,
-        tool_choice: "auto",
+        tool_choice: "required",
         output_modalities: ["text"],
         audio: {
           input: {
