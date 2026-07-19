@@ -85,8 +85,10 @@ export class VideoTransport {
 
       // Add local webcam tracks
       for (const track of this.inputStream.getVideoTracks()) {
-        pc.addTrack(track, this.inputStream);
+        const sender = pc.addTrack(track, this.inputStream);
+        if (!this.videoSender) this.videoSender = sender;
       }
+
       pc.addTransceiver("video", { direction: "recvonly" });
 
       pc.ontrack = (ev) => {
