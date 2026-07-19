@@ -121,36 +121,6 @@ export default function DesktopStage(p: StageViewProps) {
               ⬇ Download take
             </a>
           )}
-          {p.voiceAvailable && (
-            <button
-              onClick={p.toggleVoice}
-              title={
-                p.voiceState === "off"
-                  ? 'Computah voice — say "Computah" then your edit'
-                  : "Turn off Computah"
-              }
-              className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium backdrop-blur-xl transition ${
-                p.voiceState === "armed"
-                  ? "border-emerald-300/50 bg-emerald-400/20 text-emerald-100 hover:bg-emerald-400/30"
-                  : p.voiceState === "connecting"
-                    ? "border-amber-300/40 bg-amber-300/20 text-amber-100"
-                    : p.voiceState === "thinking"
-                      ? "border-cyan-300/50 bg-cyan-400/20 text-cyan-100"
-                      : p.voiceState === "error"
-                        ? "border-red-400/50 bg-red-400/20 text-red-100"
-                        : "border-white/10 bg-black/50 text-white/70 hover:bg-white/10"
-              }`}
-            >
-              <span
-                className={
-                  p.voiceState === "armed" || p.voiceState === "thinking" || p.voiceState === "connecting"
-                    ? "inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current"
-                    : "inline-block h-1.5 w-1.5 rounded-full bg-current opacity-40"
-                }
-              />
-              🎙 Computah
-            </button>
-          )}
           <button
             onClick={() => p.stopSession("manual")}
             className="rounded-full border border-red-400/40 bg-red-400/20 px-4 py-1.5 text-xs font-medium text-red-100 backdrop-blur-xl transition hover:bg-red-400/30"
