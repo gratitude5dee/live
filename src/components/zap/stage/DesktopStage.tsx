@@ -129,43 +129,41 @@ export default function DesktopStage(p: StageViewProps) {
           </div>
           <div className="-mr-2 flex flex-1 flex-col gap-1 overflow-y-auto pr-2 pb-2">
             {(() => {
-              const templates = p.presets.filter(
-                (x) => (x as unknown as { kind?: string }).kind === "template",
+              type P = (typeof p.presets)[number] & { kind?: string; template_key?: string | null };
+              const all = p.presets as P[];
+              const templates = all.filter((x) => x.kind === "template" && x.template_key !== "character_swap");
+              const swaps = all.filter((x) => x.template_key === "character_swap");
+              const gestureFx = all.filter((x) => x.template_key === "gesture_fx");
+              const looks = all.filter(
+                (x) =>
+                  x.kind !== "template" &&
+                  x.template_key !== "character_swap" &&
+                  x.template_key !== "gesture_fx",
               );
-              const others = p.presets.filter(
-                (x) => (x as unknown as { kind?: string }).kind !== "template",
-              );
+              const groups: { label: string; tone: string; items: P[] }[] = [
+                { label: "Templates", tone: "text-fuchsia-300/50", items: templates },
+                { label: "Character Swap", tone: "text-cyan-300/60", items: swaps },
+                { label: "Gesture FX", tone: "text-amber-300/60", items: gestureFx },
+                { label: "Looks", tone: "text-white/30", items: looks },
+              ].filter((g) => g.items.length > 0);
               return (
                 <>
-                  {templates.length > 0 && (
-                    <div className="mt-1 mb-1 px-1 text-[9px] uppercase tracking-[0.22em] text-fuchsia-300/50">
-                      Templates
+                  {groups.map((g, gi) => (
+                    <div key={g.label}>
+                      <div className={`${gi === 0 ? "mt-1" : "mt-3"} mb-1 px-1 text-[9px] uppercase tracking-[0.22em] ${g.tone}`}>
+                        {g.label}
+                      </div>
+                      {g.items.map((preset) => (
+                        <PresetRow
+                          key={preset.id}
+                          preset={preset}
+                          index={p.presets.indexOf(preset)}
+                          refImage={p.refImage}
+                          onApply={() => p.applyPreset(preset)}
+                          onTemplate={(k, n) => p.openTemplate(k, n)}
+                        />
+                      ))}
                     </div>
-                  )}
-                  {templates.map((preset) => (
-                    <PresetRow
-                      key={preset.id}
-                      preset={preset}
-                      index={p.presets.indexOf(preset)}
-                      refImage={p.refImage}
-                      onApply={() => p.applyPreset(preset)}
-                      onTemplate={(k, n) => p.openTemplate(k, n)}
-                    />
-                  ))}
-                  {templates.length > 0 && others.length > 0 && (
-                    <div className="mt-3 mb-1 px-1 text-[9px] uppercase tracking-[0.22em] text-white/30">
-                      Looks
-                    </div>
-                  )}
-                  {others.map((preset) => (
-                    <PresetRow
-                      key={preset.id}
-                      preset={preset}
-                      index={p.presets.indexOf(preset)}
-                      refImage={p.refImage}
-                      onApply={() => p.applyPreset(preset)}
-                      onTemplate={(k, n) => p.openTemplate(k, n)}
-                    />
                   ))}
                 </>
               );
