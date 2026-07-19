@@ -51,7 +51,11 @@
   position: absolute;
   top: 50%;
   left: var(--ow-inset);
+  right: 12px;
+  max-width: calc(100% - var(--ow-inset) - 12px);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-size: var(--ow-font-size);
   line-height: 1;
   font-weight: 300;
@@ -65,6 +69,13 @@
     var(--ow-text-color)
   );
   transition: font-weight 220ms ease;
+}
+.option-wheel__label {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .option-wheel--right .option-wheel__item {
