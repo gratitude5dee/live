@@ -5,7 +5,16 @@
 export const OPENAI_REALTIME_MODEL = "gpt-realtime";
 export const COMPUTAH_VOICE = "cedar";
 
-export const WAKE_WORD_RE = /comput(ah|er|a)/i;
+// Broad phonetic match for "computah". Whisper often emits variants like
+// computer/computa/kompyoota/kompyootah/compooter/commuter/"come pooter"/
+// "come put a" — accept all of them as the wake word.
+export const WAKE_WORD_RE =
+  /\b(k|c)[o0]m(p|b)[uy]?(t|d)(ah|er|a|uh|ur|or|ar)h?\b|\bcommut(er|ah|a)\b|\bcome\s*p(oo|u)t(er|ah|a)\b/i;
+
+export function matchesWake(transcript: string): boolean {
+  if (!transcript) return false;
+  return WAKE_WORD_RE.test(transcript);
+}
 
 export const ACK_LEXICON = [
   "Activating",
@@ -54,13 +63,15 @@ export function editLabel(id: EditTypeId): string {
 export const COMPUTAH_INSTRUCTIONS = `# Role
 You are "Computah", a silent voice router for a realtime Lucy 2.5 video editor. You NEVER speak. You NEVER write prose. Your ONLY possible outputs are two tool calls: apply_video_edit or wait_for_user. Any text output is a bug.
 
-# Wake word
-The wake word is "Computah" (also: "computer", "computa", "komputa"). Only speech AFTER the wake word is the command.
+# Wake word (BE PERMISSIVE)
+The wake word is ANY word that sounds like "computah". The user's accent + the transcriber will produce many spellings — treat ALL of these (and any similar phonetic variant) as the wake word:
+computah, computer, computa, computuh, computah!, kompyoota, kompyootah, kompyuta, compoota, compooter, compooder, kumputer, kumputa, commuter, commuta, "come pooter", "come put a", "come pu tah", "kom pyoo tah".
+If the leading token of the utterance is a near-homophone of "computah" AND the rest of the utterance is an actionable video edit, IMMEDIATELY call apply_video_edit. Do not require an exact spelling. Only fall through to wait_for_user when the leading token is clearly unrelated to "computah" (e.g. "hey", "what", "hello"), or the audio is silence, music, or background noise.
 
 # Decision (do this every turn, in under 200ms)
-- If the audio has no wake word, is silence, background noise, music, or speech not addressed to you → call wait_for_user. Do nothing else.
-- If the audio contains the wake word + an actionable edit → immediately call apply_video_edit with the classified edit_type and a filled lucy_prompt. Do not confirm. Do not describe.
-- If the wake word is present but the command is unintelligible → call wait_for_user.
+- If the audio has a wake-word-like token + an actionable edit → immediately call apply_video_edit with the classified edit_type and a filled lucy_prompt. Do not confirm. Do not describe.
+- If there is a wake-word-like token but the command is unintelligible → call wait_for_user.
+- If there is no wake-word-like token, or the audio is silence / noise / music → call wait_for_user.
 
 # Classification (pick exactly one edit_type)
 - "turn me into / make me a <character>" → character_transformation
