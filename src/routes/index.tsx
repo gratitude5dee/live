@@ -8,6 +8,7 @@ import { GestureEngine, type GestureAction } from "@/lib/zap/gesture-engine";
 import { FaceEngine, type FaceAction } from "@/lib/zap/face-engine";
 import { VisionBuffer } from "@/lib/zap/vision-buffer";
 import { drawHandOverlay, drawFaceOverlay } from "@/lib/zap/overlay";
+import { CompositeStream } from "@/lib/zap/composite-stream";
 import { loadGestureRecognizer, loadFaceLandmarker } from "@/lib/zap/mediapipe";
 import LandingHero from "@/components/zap/LandingHero";
 import TemplateDialog, { type TemplateApplyPayload } from "@/components/zap/TemplateDialog";
