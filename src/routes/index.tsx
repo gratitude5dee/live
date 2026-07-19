@@ -1274,6 +1274,24 @@ function StagePage() {
     toast("Reference cleared");
   }, [enhance]);
 
+  const applyRefImage = useCallback(() => {
+    if (!transportRef.current) {
+      toast.error("Not connected yet");
+      return;
+    }
+    if (!refImage) {
+      toast.error("Upload a reference first");
+      return;
+    }
+    const text = prompt.trim() || appliedRef.current?.text || "";
+    if (!text) {
+      toast.error("Type a prompt first");
+      return;
+    }
+    void applyPrompt(text, "text", refImage);
+    toast.success("Applied with reference");
+  }, [refImage, prompt, applyPrompt]);
+
 
   const savePreset = async () => {
     if (!applied?.text) return;
