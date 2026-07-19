@@ -233,6 +233,7 @@ function StagePage() {
     if (!transportRef.current) return;
     setPrevApplied(applied);
     setApplied(null);
+    activePresetKindRef.current = "other";
     transportRef.current.send({ prompt: "", enable_prompt_expansion: false });
     await logPromptEvent("clear", "gesture", null);
   }, [applied, logPromptEvent]);
