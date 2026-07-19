@@ -358,6 +358,36 @@ export default function DesktopStage(p: StageViewProps) {
       <footer className="fixed inset-x-0 bottom-0 z-20 px-8 pb-6 pt-2">
         <div className="mx-auto max-w-4xl rounded-[1.75rem] border border-white/10 bg-black/60 p-1.5 backdrop-blur-2xl">
           <div className="flex flex-wrap items-center gap-2 rounded-[calc(1.75rem-0.375rem)] bg-black/40 p-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]">
+            {p.voiceAvailable && (
+              <button
+                onClick={p.toggleVoice}
+                title={
+                  p.voiceState === "off"
+                    ? 'Computah voice — say "Computah" then your edit'
+                    : "Turn off Computah"
+                }
+                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-xs font-medium backdrop-blur-xl transition ${
+                  p.voiceState === "armed"
+                    ? "border-emerald-300/50 bg-emerald-400/20 text-emerald-100 hover:bg-emerald-400/30"
+                    : p.voiceState === "connecting"
+                      ? "border-amber-300/40 bg-amber-300/20 text-amber-100"
+                      : p.voiceState === "thinking"
+                        ? "border-cyan-300/50 bg-cyan-400/20 text-cyan-100"
+                        : p.voiceState === "error"
+                          ? "border-red-400/50 bg-red-400/20 text-red-100"
+                          : "border-white/10 bg-black/50 text-white/70 hover:bg-white/10"
+                }`}
+              >
+                <span
+                  className={
+                    p.voiceState === "armed" || p.voiceState === "thinking" || p.voiceState === "connecting"
+                      ? "inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current"
+                      : "inline-block h-1.5 w-1.5 rounded-full bg-current opacity-40"
+                  }
+                />
+                🎙 Computah
+              </button>
+            )}
             <input
               value={p.prompt}
               onChange={(e) => p.setPrompt(e.target.value)}
@@ -365,7 +395,7 @@ export default function DesktopStage(p: StageViewProps) {
                 if (e.key === "Enter" && p.prompt.trim()) p.applyPrompt(p.prompt, "text");
               }}
               placeholder="Describe an edit… (e.g. change background to snowy mountain)"
-              className="flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-white/25"
+              className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none placeholder:text-white/25"
             />
             <label className="flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-[11px] text-white/60">
               <input
