@@ -1,4 +1,5 @@
-import type { GestureRecognizerResult } from "@mediapipe/tasks-vision";
+import type { GestureRecognizerResult, FaceLandmarkerResult } from "@mediapipe/tasks-vision";
+import { FaceLandmarker } from "@mediapipe/tasks-vision";
 import { HAND_CONNECTIONS } from "./mediapipe";
 
 export function drawHandOverlay(
