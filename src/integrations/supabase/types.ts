@@ -21,8 +21,10 @@ export type Database = {
           id: number
           name: string
           prompt: string
+          ref_image_url: string | null
           requires_ref: boolean
           sort_order: number
+          thumbnail_url: string | null
           user_id: string | null
         }
         Insert: {
@@ -31,8 +33,10 @@ export type Database = {
           id?: never
           name: string
           prompt: string
+          ref_image_url?: string | null
           requires_ref?: boolean
           sort_order?: number
+          thumbnail_url?: string | null
           user_id?: string | null
         }
         Update: {
@@ -41,8 +45,10 @@ export type Database = {
           id?: never
           name?: string
           prompt?: string
+          ref_image_url?: string | null
           requires_ref?: boolean
           sort_order?: number
+          thumbnail_url?: string | null
           user_id?: string | null
         }
         Relationships: []
