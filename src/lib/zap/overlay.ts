@@ -8,7 +8,6 @@ export function drawHandOverlay(
   holdProgress: number,
 ) {
   const { canvas } = ctx;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (!result || !result.landmarks?.length) return;
 
   const W = canvas.width;
