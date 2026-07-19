@@ -204,7 +204,9 @@ export default function DesktopStage(p: StageViewProps) {
           <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-black">
             <video
               ref={p.attachInputVideo}
-              className="h-full w-full -scale-x-100 object-cover"
+              className={`h-full w-full -scale-x-100 object-cover ${
+                p.depthOn && p.depthStream ? "invisible" : ""
+              }`}
               autoPlay
               playsInline
               muted
@@ -215,8 +217,11 @@ export default function DesktopStage(p: StageViewProps) {
             )}
             <canvas
               ref={p.overlayRef as React.RefObject<HTMLCanvasElement>}
-              className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
+              className={`pointer-events-none absolute inset-0 z-20 h-full w-full -scale-x-100 ${
+                p.depthOn ? "hidden" : ""
+              }`}
             />
+
             {/* Source badge — what Lucy is currently receiving */}
             <div className="absolute left-2 top-2 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-white/70 backdrop-blur-xl">
               <span className={
