@@ -271,6 +271,8 @@ function StagePage() {
         return;
       }
       currentPresetIndex.current = presets.findIndex((p) => p.id === preset.id);
+      activePresetKindRef.current =
+        preset.template_key === "character_swap" ? "character_swap" : "other";
       await applyPrompt(preset.prompt, source, ref);
     },
     [applyPrompt, refImage, presets, loadPresetRef],
