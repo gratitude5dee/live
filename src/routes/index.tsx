@@ -1314,6 +1314,12 @@ function StagePage() {
         agent?.sendToolOutput(call.callId, { status: "ok" }, { respond: false });
         return;
       }
+      if (call.name === "wake_word_missed") {
+        // Safety net: Whisper heard the wake word but the model didn't route it.
+        const t = (call.args as { transcript?: string })?.transcript ?? "";
+        toast(`Heard "${t.slice(0, 60)}" — say it again`);
+        return;
+      }
       if (call.name !== "apply_video_edit") {
         agent?.sendToolOutput(
           call.callId,
