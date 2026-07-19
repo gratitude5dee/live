@@ -44,6 +44,8 @@ export interface StageViewProps {
   clearRefImage: () => void;
   savePreset: () => void;
   flipCamera: () => void;
+  flipping: boolean;
+  facingMode: "user" | "environment";
 
 
   // presets
