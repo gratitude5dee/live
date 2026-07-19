@@ -143,6 +143,21 @@ function StagePage() {
   // Surfaced in the camera PiP so users can confirm the pipeline at a glance.
   const [activeSource, setActiveSource] = useState<"raw" | "composite" | "depth">("raw");
 
+  // Baked landmarks (compositor) is opt-in — sending the raw 1080p track keeps
+  // Lucy's output sharp. Character-Swap / Gesture-FX presets can opt-in from
+  // the camera PiP if they want landmarks composited into the outbound frame.
+  const [bakeLandmarks, setBakeLandmarks] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem("zap:bakeLandmarks") === "1";
+  });
+  const bakeLandmarksRef = useRef(bakeLandmarks);
+  useEffect(() => {
+    bakeLandmarksRef.current = bakeLandmarks;
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("zap:bakeLandmarks", bakeLandmarks ? "1" : "0");
+    }
+  }, [bakeLandmarks]);
+
   // Lazily build / dispose the compositor. On mobile Safari, the extra 30fps
   // canvas re-encode is expensive and softens the feed, so we only spin it
   // up when a Character-Swap or Gesture-FX preset actually needs baked
