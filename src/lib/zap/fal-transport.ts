@@ -1,16 +1,13 @@
-import { fal } from "@fal-ai/client";
-import { mintFalRealtimeToken } from "@/lib/fal-token.functions";
-import { LUCY_APP } from "./types";
-
-type FalPayload = Record<string, unknown>;
+import {
+  createLucySession,
+  heartbeatLucySession,
+} from "@/lib/wma-session.functions";
 
 type TransportCallbacks = {
   onOutputStream: (stream: MediaStream) => void;
   onTransportChosen: (t: "webrtc") => void;
   onError: (e: unknown) => void;
 };
-
-type FalConnection = { send: (p: unknown) => void; close: () => void };
 
 export type TransportSend = (payload: {
   prompt: string;
@@ -21,16 +18,17 @@ export type TransportSend = (payload: {
 /**
  * Video transport for Lucy 2.5 realtime.
  *
- * Lucy is a WebRTC video-to-video model. `fal.realtime.connect()` opens a
- * WebSocket that carries WebRTC signaling; media flows peer-to-peer.
- * `connection.send({ prompt })` only ships prompt updates over the signaling
- * channel — the video is the webcam's `MediaStream`.
+ * Lucy uses fal's WMA bridge for the one-shot SDP exchange. Media and prompt
+ * controls then flow peer-to-peer over WebRTC.
  */
 export class VideoTransport {
   private inputStream: MediaStream;
   private cb: TransportCallbacks;
-  private connection: FalConnection | null = null;
   private pc: RTCPeerConnection | null = null;
+  private controlChannel: RTCDataChannel | null = null;
+  private sessionId: string | null = null;
+  private heartbeat: ReturnType<typeof setInterval> | null = null;
+  private connectTimeout: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
   private outboundPaused = false;
   private lastPrompt: {
@@ -38,8 +36,6 @@ export class VideoTransport {
     enable_prompt_expansion?: boolean;
     reference_image_url?: string;
   } | null = null;
-  private negotiated = false;
-  private pendingLocalCandidates: RTCIceCandidateInit[] = [];
 
   constructor(inputStream: MediaStream, cb: TransportCallbacks) {
     this.inputStream = inputStream;
@@ -56,71 +52,18 @@ export class VideoTransport {
   }
 
   async start() {
-    this.connection = fal.realtime.connect(LUCY_APP, {
-      throttleInterval: 0,
-      onResult: (result) => this.handleResult(result as FalPayload),
-      onError: (e) => this.cb.onError(e),
-      tokenProvider: async () => {
-        return await mintFalRealtimeToken({ data: { app: LUCY_APP } });
-      },
-      tokenExpirationSeconds: 60,
-    } as Parameters<typeof fal.realtime.connect>[1]) as unknown as FalConnection;
-
-    // Kick off WebRTC negotiation immediately with public STUN.
-    // The bridge may send back updated iceServers via onResult; we'll ignore
-    // for now since the default set works for browser origination.
     await this.beginWebRTC([{ urls: "stun:stun.l.google.com:19302" }]);
-    this.cb.onTransportChosen("webrtc");
   }
 
   send: TransportSend = (payload) => {
     this.lastPrompt = { ...payload };
-    if (!this.connection) return;
-    try {
-      this.connection.send({
-        prompt: payload.prompt,
-        enable_prompt_expansion: payload.enable_prompt_expansion ?? true,
-        ...(payload.reference_image_url
-          ? { reference_image_url: payload.reference_image_url }
-          : {}),
-      });
-    } catch (e) {
-      this.cb.onError(e);
-    }
+    this.flushPrompt();
   };
 
-  private async handleResult(result: FalPayload) {
-    // Log unknown payloads to help refine the signaling shape at runtime.
-    if (!result || typeof result !== "object") return;
-
-    // Common signaling shapes we know how to react to
-    if (result.type === "answer" && typeof result.sdp === "string") {
-      try {
-        await this.pc?.setRemoteDescription({ type: "answer", sdp: result.sdp });
-        this.flushPendingCandidates();
-      } catch (e) {
-        this.cb.onError(e);
-      }
-      return;
-    }
-    if (
-      result.type === "candidate" &&
-      result.candidate &&
-      typeof result.candidate === "object"
-    ) {
-      try {
-        await this.pc?.addIceCandidate(result.candidate as RTCIceCandidateInit);
-      } catch (e) {
-        console.warn("addIceCandidate failed", e);
-      }
-      return;
-    }
-    if (result.type === "iceServers" && Array.isArray(result.iceServers)) {
-      // Late iceServers — nothing to do post-offer; skip.
-      return;
-    }
-    // Debug: log any other payloads so we can iterate on unknown fields
-    console.debug("[lucy] onResult", result);
+  private attachControlChannel(channel: RTCDataChannel) {
+    this.controlChannel = channel;
+    channel.onopen = () => this.flushPrompt();
+    channel.onerror = () => this.cb.onError(new Error("Lucy control channel failed"));
   }
 
   private async beginWebRTC(iceServers: RTCIceServer[]) {
@@ -132,8 +75,8 @@ export class VideoTransport {
       for (const track of this.inputStream.getVideoTracks()) {
         pc.addTrack(track, this.inputStream);
       }
-      // Also want to receive remote video
-      pc.addTransceiver("video", { direction: "sendrecv" });
+      pc.addTransceiver("video", { direction: "recvonly" });
+      pc.ondatachannel = (event) => this.attachControlChannel(event.channel);
 
       pc.ontrack = (ev) => {
         if (this.closed) return;
@@ -141,13 +84,13 @@ export class VideoTransport {
         this.cb.onOutputStream(remote);
       };
 
-      pc.onicecandidate = (ev) => {
-        if (!ev.candidate) return;
-        const cand = ev.candidate.toJSON();
-        if (!this.negotiated) {
-          this.pendingLocalCandidates.push(cand);
-        } else {
-          this.connection?.send({ type: "candidate", candidate: cand });
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "connected") {
+          if (this.connectTimeout) clearTimeout(this.connectTimeout);
+          this.connectTimeout = null;
+          this.cb.onTransportChosen("webrtc");
+        } else if (pc.connectionState === "failed") {
+          this.cb.onError(new Error("Lucy WebRTC connection failed"));
         }
       };
 
@@ -157,10 +100,13 @@ export class VideoTransport {
       });
       await pc.setLocalDescription(offer);
 
-      // Wait briefly for ICE gathering to reduce trickle
-      await new Promise<void>((resolve) => {
+      // WMA does not support trickle ICE: the offer must contain candidates.
+      await new Promise<void>((resolve, reject) => {
         if (pc.iceGatheringState === "complete") return resolve();
-        const timeout = setTimeout(resolve, 1500);
+        const timeout = setTimeout(
+          () => reject(new Error("Timed out gathering WebRTC candidates")),
+          10_000,
+        );
         pc.onicegatheringstatechange = () => {
           if (pc.iceGatheringState === "complete") {
             clearTimeout(timeout);
@@ -169,28 +115,62 @@ export class VideoTransport {
         };
       });
 
-      this.negotiated = true;
-      this.connection?.send({
-        type: "offer",
-        sdp: pc.localDescription?.sdp,
+      const sdp = pc.localDescription?.sdp;
+      if (!sdp) throw new Error("WebRTC offer was empty");
+      const answer = await createLucySession({
+        data: { type: "offer", sdp },
       });
-      // Flush any candidates that gathered after "complete" fired
-      this.flushPendingCandidates();
+      if (this.closed) return;
+      this.sessionId = answer.session_id;
+      await pc.setRemoteDescription({ type: "answer", sdp: answer.sdp });
+
+      this.heartbeat = setInterval(() => {
+        if (!this.sessionId || this.closed) return;
+        heartbeatLucySession({ data: { sessionId: this.sessionId } }).catch(
+          (error) => console.warn("Lucy heartbeat error", error),
+        );
+      }, 5_000);
+      this.connectTimeout = setTimeout(() => {
+        if (pc.connectionState !== "connected") {
+          this.cb.onError(new Error("Lucy did not establish a media connection"));
+        }
+      }, 15_000);
     } catch (e) {
       this.cb.onError(e);
+      throw e;
     }
   }
 
-  private flushPendingCandidates() {
-    if (!this.connection) return;
-    for (const cand of this.pendingLocalCandidates) {
-      this.connection.send({ type: "candidate", candidate: cand });
+  private flushPrompt() {
+    if (!this.lastPrompt || this.controlChannel?.readyState !== "open") return;
+    const payload = this.lastPrompt;
+    try {
+      this.controlChannel.send(
+        JSON.stringify({
+          prompt: payload.prompt,
+          enable_prompt_expansion: payload.enable_prompt_expansion ?? true,
+          ...(payload.reference_image_url
+            ? { reference_image_url: payload.reference_image_url }
+            : {}),
+        }),
+      );
+    } catch (error) {
+      this.cb.onError(error);
     }
-    this.pendingLocalCandidates = [];
   }
 
   close() {
     this.closed = true;
+    if (this.heartbeat) clearInterval(this.heartbeat);
+    if (this.connectTimeout) clearTimeout(this.connectTimeout);
+    this.heartbeat = null;
+    this.connectTimeout = null;
+    try {
+      this.controlChannel?.close();
+    } catch {
+      // ignore
+    }
+    this.controlChannel = null;
     if (this.pc) {
       try {
         this.pc.close();
@@ -199,11 +179,6 @@ export class VideoTransport {
       }
       this.pc = null;
     }
-    try {
-      this.connection?.close();
-    } catch {
-      // ignore
-    }
-    this.connection = null;
+    this.sessionId = null;
   }
 }
