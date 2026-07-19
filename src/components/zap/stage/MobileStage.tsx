@@ -278,19 +278,46 @@ export default function MobileStage(p: StageViewProps) {
                 placeholder="Describe an edit…"
                 className="flex-1 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-white/25"
               />
-              <label className="cursor-pointer rounded-full border border-white/10 px-2.5 py-1.5 text-[11px]">
-                🖼️
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  capture="environment"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) p.onRefUpload(f);
-                  }}
-                />
-              </label>
+              <input
+                id="ref-file-mobile"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) p.onRefUpload(f);
+                  e.currentTarget.value = "";
+                }}
+              />
+              {p.refImage ? (
+                <div className="relative">
+                  <label
+                    htmlFor="ref-file-mobile"
+                    className="block cursor-pointer overflow-hidden rounded-lg ring-1 ring-white/10"
+                  >
+                    <img
+                      src={p.refImage.dataUri}
+                      alt="reference"
+                      className="h-8 w-8 object-cover"
+                    />
+                  </label>
+                  <button
+                    onClick={p.clearRefImage}
+                    aria-label="Remove reference"
+                    className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-white/20 bg-black/80 text-[10px] leading-none text-white/80"
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <label
+                  htmlFor="ref-file-mobile"
+                  className="cursor-pointer rounded-full border border-white/10 px-2.5 py-1.5 text-[11px]"
+                >
+                  🖼️
+                </label>
+              )}
               <SpecularButton
                 size="sm"
                 radius={999}
