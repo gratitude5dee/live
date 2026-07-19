@@ -462,6 +462,8 @@ function StagePage() {
     visionBufRef.current = null;
     inputStreamRef.current?.getTracks().forEach((t) => t.stop());
     inputStreamRef.current = null;
+    compositorRef.current?.stop();
+    compositorRef.current = null;
     outputStreamRef.current = null;
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
