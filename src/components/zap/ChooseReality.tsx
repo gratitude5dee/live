@@ -61,7 +61,6 @@ export default function ChooseReality({ onEnter, disabled }: ChooseRealityProps)
     let next = Math.floor(Math.random() * presets.length);
     if (next === idx) next = (next + 1) % presets.length;
     setIdx(next);
-    wheelResetRef.current?.(next);
   };
 
   if (!items.length) {
