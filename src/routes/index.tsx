@@ -529,7 +529,7 @@ function StagePage() {
             if (d) URL.revokeObjectURL(d.url);
             return null;
           });
-          setTimeout(() => startRecording(true), 50);
+          setTimeout(() => startRecordingRef.current?.(true), 50);
           if (!autoStopScheduledRef.current) {
             autoStopScheduledRef.current = true;
             const AUTO_STOP_MS = 90_000;
