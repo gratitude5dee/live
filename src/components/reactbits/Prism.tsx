@@ -1,5 +1,4 @@
 import { useEffect, useRef } from "react";
-// @ts-expect-error - ogl has no bundled types
 import { Renderer, Triangle, Program, Mesh } from "ogl";
 import "./Prism.css";
 
