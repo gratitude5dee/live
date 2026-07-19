@@ -1049,12 +1049,15 @@ function StagePage() {
     if (data) setPresets((prev) => [...prev, data]);
   };
 
-  const statusColor =
-    connState === "live"
-      ? "bg-emerald-500"
-      : connState === "failed"
-        ? "bg-red-500"
-        : "bg-amber-500";
+  const flipCamera = useCallback(() => {
+    setFacingMode((m) => (m === "user" ? "environment" : "user"));
+    // Restart the stream on the next tick; teardown then start fresh session.
+    void (async () => {
+      await stopSession("manual");
+      // small delay so refs clear
+      setTimeout(() => startSession(), 200);
+    })();
+  }, [startSession, stopSession]);
 
   if (connState === "idle") {
     return (
@@ -1074,305 +1077,47 @@ function StagePage() {
     );
   }
 
+  const viewProps = {
+    connState,
+    transport,
+    error,
+    perfMode,
+    facePresent,
+    reactiveOn,
+    pendingUpload,
+    remainingMs,
+    recording,
+    hudVisible,
+    setHudVisible,
+    attachInputVideo,
+    attachOutputVideo,
+    overlayRef,
+    qrDataUrl,
+    prompt,
+    setPrompt,
+    enhance,
+    setEnhance,
+    applied,
+    prevApplied,
+    refImage,
+    liveGesture,
+    applyPrompt: (text: string, source: "text") => void applyPrompt(text, source),
+    undo: () => void undo(),
+    clearPrompt: () => void clearPrompt(),
+    toggleRecord,
+    stopSession: (r?: "manual" | "timeout") => void stopSession(r),
+    onRefUpload,
+    savePreset,
+    flipCamera,
+    presets,
+    applyPreset: (p: Preset) => void applyPreset(p),
+    openTemplate: (key: TemplateKey, name: string) => setTemplateDialog({ key, name }),
+    download,
+  };
+
   return (
-    <div className="min-h-screen bg-[#0A0A0F] text-[#FAFAFA]">
-      {/* Header */}
-      <header className="flex items-center justify-between border-b border-[#2A2A35] px-4 py-3">
-        <div className="flex items-center gap-3">
-          <span className="font-bold tracking-wider text-[#22D3EE]">ZAP·LIVE</span>
-          <span className="flex items-center gap-1.5 rounded-full bg-[#16161D] px-2.5 py-1 text-xs">
-            <span className={`h-2 w-2 rounded-full ${statusColor}`} />
-            {connState}
-            {transport && <span className="text-[#9CA3AF]">· {transport}</span>}
-          </span>
-          {liveGesture.label && hudVisible && (
-            <span className="rounded-full bg-[#16161D] px-2.5 py-1 text-xs text-[#E879F9]">
-              {liveGesture.label} {liveGesture.score.toFixed(2)}
-            </span>
-          )}
-          {reactiveOn && hudVisible && (
-            <span className="rounded-full bg-[#E879F9]/20 px-2.5 py-1 text-xs text-[#E879F9]">
-              Reactive Face
-            </span>
-          )}
-          {perfMode && hudVisible && (
-            <span className="rounded-full bg-amber-500/20 px-2.5 py-1 text-xs text-amber-400">
-              Performance mode
-            </span>
-          )}
-          {!facePresent && connState === "live" && hudVisible && (
-            <span className="rounded-full bg-amber-500/20 px-2.5 py-1 text-xs text-amber-400">
-              Step into frame
-            </span>
-          )}
-          {pendingUpload > 0 && (
-            <span className="rounded-full bg-[#16161D] px-2.5 py-1 text-xs text-[#9CA3AF]">
-              ↑ {pendingUpload}
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Link
-            to="/library"
-            className="rounded-md bg-[#16161D] px-3 py-1.5 text-xs hover:bg-[#22222D]"
-          >
-            Library
-          </Link>
-          {connState === "live" && (
-            <SpecularButton
-              size="sm"
-              radius={10}
-              onClick={toggleRecord}
-              tint={recording ? "#F87171" : "#F87171"}
-              tintOpacity={recording ? 0.9 : 0.15}
-              textColor={recording ? "#0a0a0f" : "#fca5a5"}
-              lineColor="#fca5a5"
-              baseColor="#7f1d1d"
-            >
-              {recording ? "■ Stop" : "⬤ Record"}
-            </SpecularButton>
-          )}
-          {remainingMs !== null && (
-            <span className="rounded-full border border-[#2A2A35] bg-[#16161D] px-2.5 py-1 font-mono text-xs tabular-nums text-[#9CA3AF]">
-              {Math.floor(remainingMs / 1000 / 60)}:
-              {String(Math.floor((remainingMs / 1000) % 60)).padStart(2, "0")}
-            </span>
-          )}
-          {download && (
-            <a
-              href={download.url}
-              download={download.filename}
-              className="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/20"
-            >
-              ⬇ Download take
-            </a>
-          )}
-          <button
-            onClick={() => void stopSession("manual")}
-            className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 transition hover:bg-red-500/20"
-          >
-            Disconnect
-          </button>
-
-        </div>
-
-      </header>
-
-      {error && (
-        <div className="border-b border-red-500/50 bg-red-500/10 px-4 py-2 text-sm text-red-300">
-          {error}
-        </div>
-      )}
-
-      {/* Stage */}
-      <main className="relative mx-auto max-w-6xl p-4">
-        {(
-          <div className="relative mx-auto aspect-[9/16] max-h-[calc(100vh-220px)] w-auto overflow-hidden rounded-2xl border border-[#2A2A35] bg-black">
-
-            <video
-              ref={attachOutputVideo}
-              className="h-full w-full object-cover"
-              autoPlay
-              playsInline
-              muted
-            />
-            {connState !== "live" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-sm text-[#9CA3AF]">
-                {connState === "connecting"
-                  ? "Connecting to Lucy…"
-                  : connState === "requesting_camera"
-                    ? "Requesting camera…"
-                    : connState}
-              </div>
-            )}
-
-            {/* PiP — kept mounted (inference reads from it); chrome hidden when HUD off */}
-            <div
-              className={`absolute right-3 top-3 h-36 w-64 overflow-hidden rounded-lg border border-[#2A2A35] bg-black shadow-lg transition-opacity ${hudVisible ? "opacity-100" : "pointer-events-none opacity-0"}`}
-            >
-              <video
-                ref={attachInputVideo}
-                className="h-full w-full -scale-x-100 object-cover"
-                autoPlay
-                playsInline
-                muted
-              />
-              <canvas
-                ref={overlayRef}
-                className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
-              />
-              {!facePresent && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs text-amber-300">
-                  Step into frame
-                </div>
-              )}
-              {liveGesture.label && (
-                <div className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[10px] text-[#22D3EE]">
-                  {liveGesture.label} · {liveGesture.score.toFixed(2)}
-                </div>
-              )}
-              {liveGesture.hold > 0 && (
-                <div
-                  className="absolute inset-x-0 bottom-0 h-1 bg-[#FAFAFA]"
-                  style={{ width: `${liveGesture.hold * 100}%` }}
-                />
-              )}
-            </div>
-
-
-
-            {qrDataUrl && (
-              <div className="absolute bottom-3 right-3 rounded-lg bg-white p-1">
-                <img src={qrDataUrl} alt="Remote QR" className="h-24 w-24" />
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Preset rail */}
-        {/* Preset rail */}
-        {(
-
-          <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-            {presets.map((p, i) => {
-              const hasThumb = !!p.thumbnail_url;
-              const kind = (p as unknown as { kind?: string }).kind ?? "preset";
-              const templateKey = (p as unknown as { template_key?: TemplateKey })
-                .template_key;
-              const isTemplate = kind === "template" && !!templateKey;
-              const disabled =
-                !isTemplate && p.requires_ref && !p.ref_image_url && !refImage;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => {
-                    if (isTemplate && templateKey) {
-                      setTemplateDialog({ key: templateKey, name: p.name });
-                    } else {
-                      applyPreset(p);
-                    }
-                  }}
-                  disabled={disabled}
-                  className={`group relative flex min-w-[84px] flex-col items-center gap-1 overflow-hidden rounded-xl border text-xs transition disabled:opacity-40 ${
-                    isTemplate
-                      ? "border-dashed border-[#E879F9]/60 bg-[#16161D] hover:border-[#E879F9]"
-                      : "border-[#2A2A35] bg-[#16161D] hover:border-[#22D3EE]"
-                  }`}
-                  title={`${p.name}${isTemplate ? " · drop an image" : ` (${i < 9 ? i + 1 : 0})`}`}
-                >
-                  {hasThumb ? (
-                    <div className="relative h-14 w-full overflow-hidden">
-                      <img
-                        src={p.thumbnail_url!}
-                        alt={p.name}
-                        className="h-full w-full object-cover transition group-hover:scale-105"
-                      />
-                      <span className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[10px] leading-none py-0.5">
-                        {p.emoji}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="relative mt-2 flex flex-col items-center">
-                      <span className="text-xl">{p.emoji}</span>
-                      {isTemplate && (
-                        <span className="absolute -right-3 -top-1 rounded bg-[#E879F9]/20 px-1 text-[9px] text-[#E879F9]">
-                          📥
-                        </span>
-                      )}
-                    </div>
-                  )}
-                  <span className="px-2 pb-1.5 text-[#9CA3AF] truncate max-w-[84px]">{p.name}</span>
-                </button>
-              );
-            })}
-
-            {applied && (
-              <button
-                onClick={savePreset}
-                className="min-w-[80px] rounded-xl border border-dashed border-[#2A2A35] px-3 py-2 text-xs text-[#9CA3AF] hover:border-[#E879F9]"
-              >
-                ＋ Save
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Prompt dock */}
-        {(
-          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-[#2A2A35] bg-[#16161D] p-3">
-            <input
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && prompt.trim())
-                  applyPrompt(prompt, "text");
-              }}
-              placeholder="Describe an edit… (e.g. change background to snowy mountain)"
-              className="flex-1 bg-transparent px-2 py-2 text-sm outline-none placeholder:text-[#4a4a5a]"
-            />
-            <label className="flex items-center gap-1 text-xs text-[#9CA3AF]">
-              <input
-                type="checkbox"
-                checked={enhance}
-                onChange={(e) => setEnhance(e.target.checked)}
-              />
-              ✨ Enhance
-            </label>
-            <label className="cursor-pointer rounded-md bg-[#22222D] px-3 py-2 text-xs hover:bg-[#2A2A35]">
-              🖼️ Ref
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) onRefUpload(f);
-                }}
-              />
-            </label>
-            {refImage && (
-              <img
-                src={refImage.dataUri}
-                alt=""
-                className="h-8 w-8 rounded object-cover"
-              />
-            )}
-            <SpecularButton
-              size="sm"
-              radius={10}
-              onClick={() => prompt.trim() && applyPrompt(prompt, "text")}
-              tint="#22D3EE"
-              tintOpacity={0.18}
-              textColor="#67e8f9"
-              lineColor="#67e8f9"
-              baseColor="#0e7490"
-            >
-              Apply
-            </SpecularButton>
-            <button
-              onClick={undo}
-              disabled={!prevApplied}
-              className="rounded-md bg-[#22222D] px-3 py-2 text-xs hover:bg-[#2A2A35] disabled:opacity-40"
-            >
-              Undo
-            </button>
-            <button
-              onClick={clearPrompt}
-              className="rounded-md bg-[#22222D] px-3 py-2 text-xs hover:bg-[#2A2A35]"
-            >
-              Clear
-            </button>
-          </div>
-        )}
-
-        {applied && (
-          <p className="mt-2 truncate text-xs text-[#4ADE80]">
-            → {applied.text}
-          </p>
-        )}
-      </main>
-
+    <>
+      {isMobile ? <MobileStage {...viewProps} /> : <DesktopStage {...viewProps} />}
       {templateDialog && (
         <TemplateDialog
           open={!!templateDialog}
@@ -1382,6 +1127,7 @@ function StagePage() {
           onApply={applyTemplate}
         />
       )}
-    </div>
+    </>
   );
 }
+
