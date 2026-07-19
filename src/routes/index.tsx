@@ -95,6 +95,9 @@ function StagePage() {
   const inputStreamRef = useRef<MediaStream | null>(null);
   const outputStreamRef = useRef<MediaStream | null>(null);
   const compositorRef = useRef<CompositeStream | null>(null);
+  // Only bake face landmarks into Lucy's input when the active preset is a
+  // character-swap style (face geometry helps re-identify the subject).
+  const activePresetKindRef = useRef<"character_swap" | "other">("other");
   const transportRef = useRef<VideoTransport | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
