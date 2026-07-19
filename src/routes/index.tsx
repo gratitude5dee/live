@@ -1362,6 +1362,16 @@ function StagePage() {
           </p>
         )}
       </main>
+
+      {templateDialog && (
+        <TemplateDialog
+          open={!!templateDialog}
+          templateKey={templateDialog.key}
+          name={templateDialog.name}
+          onClose={() => setTemplateDialog(null)}
+          onApply={applyTemplate}
+        />
+      )}
     </div>
   );
 }
