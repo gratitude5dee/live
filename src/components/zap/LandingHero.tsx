@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import LiquidEther from "@/components/reactbits/LiquidEther";
 import Strands from "@/components/reactbits/Strands";
 import GlassSurface from "@/components/reactbits/GlassSurface";
 import BubbleMenu from "@/components/reactbits/BubbleMenu";
 import ASCIIText from "@/components/reactbits/ASCIIText";
 import GhostCursor from "@/components/reactbits/GhostCursor";
+import ShinyText from "@/components/reactbits/ShinyText";
 import ChooseReality from "@/components/zap/ChooseReality";
 import ModesSection from "@/components/zap/ModesSection";
 import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
