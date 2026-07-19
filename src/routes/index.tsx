@@ -95,9 +95,11 @@ function StagePage() {
   const inputStreamRef = useRef<MediaStream | null>(null);
   const outputStreamRef = useRef<MediaStream | null>(null);
   const compositorRef = useRef<CompositeStream | null>(null);
-  // Only bake face landmarks into Lucy's input when the active preset is a
-  // character-swap style (face geometry helps re-identify the subject).
-  const activePresetKindRef = useRef<"character_swap" | "other">("other");
+  // Route MediaPipe baking based on the active preset's category:
+  //  - character_swap → bake face landmarks (helps Lucy re-identify the subject)
+  //  - gesture_fx     → bake hand landmarks (anchors hand-based VFX like Fire Hands)
+  //  - other          → send a clean webcam frame
+  const activePresetKindRef = useRef<"character_swap" | "gesture_fx" | "other">("other");
   const transportRef = useRef<VideoTransport | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
