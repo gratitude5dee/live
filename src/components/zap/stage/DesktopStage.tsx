@@ -357,26 +357,41 @@ export default function DesktopStage(p: StageViewProps) {
               }}
             />
             {p.refImage ? (
-              <div className="group relative">
-                <label
-                  htmlFor="ref-file"
-                  title="Click to replace reference image"
-                  className="block cursor-pointer overflow-hidden rounded-lg ring-1 ring-white/10 transition hover:ring-cyan-300/60"
-                >
-                  <img
-                    src={p.refImage.dataUri}
-                    alt="reference"
-                    className="h-8 w-8 object-cover"
-                  />
-                </label>
-                <button
-                  onClick={p.clearRefImage}
-                  title="Remove reference image"
-                  aria-label="Remove reference image"
-                  className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-white/20 bg-black/80 text-[10px] leading-none text-white/80 shadow-md transition hover:bg-red-500/80 hover:text-white"
-                >
-                  ×
-                </button>
+              <div className="flex items-center gap-1.5">
+                <div className="group relative">
+                  <label
+                    htmlFor="ref-file"
+                    title="Click to replace reference image"
+                    className={`block cursor-pointer overflow-hidden rounded-lg ring-1 transition ${
+                      p.refImagePending
+                        ? "ring-cyan-300/80 shadow-[0_0_0_2px_rgba(34,211,238,0.25)] animate-pulse"
+                        : "ring-white/10 hover:ring-cyan-300/60"
+                    }`}
+                  >
+                    <img
+                      src={p.refImage.dataUri}
+                      alt="reference"
+                      className="h-8 w-8 object-cover"
+                    />
+                  </label>
+                  <button
+                    onClick={p.clearRefImage}
+                    title="Remove reference image"
+                    aria-label="Remove reference image"
+                    className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-white/20 bg-black/80 text-[10px] leading-none text-white/80 shadow-md transition hover:bg-red-500/80 hover:text-white"
+                  >
+                    ×
+                  </button>
+                </div>
+                {p.refImagePending && (
+                  <button
+                    onClick={p.applyRefImage}
+                    title="Send reference image + prompt to Lucy"
+                    className="rounded-full border border-cyan-300/40 bg-cyan-300/10 px-2.5 py-1 text-[11px] font-medium text-cyan-100 transition hover:bg-cyan-300/20"
+                  >
+                    Apply
+                  </button>
+                )}
               </div>
             ) : (
               <label
