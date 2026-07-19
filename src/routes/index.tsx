@@ -71,8 +71,6 @@ function StagePage() {
   const [facePresent, setFacePresent] = useState(true);
   const [perfMode, setPerfMode] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(0);
-  const [inputStream, setInputStream] = useState<MediaStream | null>(null);
-  const [outputStream, setOutputStream] = useState<MediaStream | null>(null);
 
   const inputVideoRef = useRef<HTMLVideoElement>(null);
   const outputVideoRef = useRef<HTMLVideoElement>(null);
@@ -339,7 +337,10 @@ function StagePage() {
         audio: false,
       });
       inputStreamRef.current = stream;
-      setInputStream(stream);
+      if (inputVideoRef.current) {
+        inputVideoRef.current.srcObject = stream;
+        inputVideoRef.current.play().catch(() => {});
+      }
       setConnState("camera_ready");
 
       // Create session row
@@ -418,7 +419,10 @@ function StagePage() {
       const t = new VideoTransport(stream, {
         onOutputStream: (out) => {
           outputStreamRef.current = out;
-          setOutputStream(out);
+          if (outputVideoRef.current) {
+            outputVideoRef.current.srcObject = out;
+            outputVideoRef.current.play().catch(() => {});
+          }
           setConnState("live");
         },
         onTransportChosen: (mode) => {
@@ -485,8 +489,12 @@ function StagePage() {
         slowStreak = Math.max(0, slowStreak - 1);
       }
 
-      if (frame % everyN === 0 && inputVideoRef.current.readyState >= 2) {
-        const ts = performance.now();
+      if (
+        frame % everyN === 0 &&
+        inputVideoRef.current.readyState >= 2 &&
+        inputVideoRef.current.videoWidth > 0
+      ) {
+        const ts = Math.round(performance.now());
         try {
           if (gestureRef.current && engineRef.current) {
             const result = gestureRef.current.recognizeForVideo(
@@ -501,7 +509,7 @@ function StagePage() {
         }
         try {
           if (faceRef.current && faceEngineRef.current) {
-            const fr = faceRef.current.detectForVideo(inputVideoRef.current, ts + 0.1);
+            const fr = faceRef.current.detectForVideo(inputVideoRef.current, ts + 1);
             faceEngineRef.current.ingest(fr);
           }
         } catch (e) {
@@ -621,23 +629,24 @@ function StagePage() {
     appliedRef.current = applied;
   }, [applied]);
 
-  // Attach input MediaStream once the PiP <video> is mounted.
-  useEffect(() => {
-    const v = inputVideoRef.current;
-    if (v && inputStream && v.srcObject !== inputStream) {
-      v.srcObject = inputStream;
-      v.play().catch(() => {});
+  // Callback refs: attach srcObject the instant the <video> mounts (or remounts).
+  const attachInputVideo = useCallback((el: HTMLVideoElement | null) => {
+    inputVideoRef.current = el;
+    const s = inputStreamRef.current;
+    if (el && s && el.srcObject !== s) {
+      el.srcObject = s;
+      el.play().catch(() => {});
     }
-  }, [inputStream]);
+  }, []);
 
-  // Attach fal output MediaStream once the main <video> is mounted.
-  useEffect(() => {
-    const v = outputVideoRef.current;
-    if (v && outputStream && v.srcObject !== outputStream) {
-      v.srcObject = outputStream;
-      v.play().catch(() => {});
+  const attachOutputVideo = useCallback((el: HTMLVideoElement | null) => {
+    outputVideoRef.current = el;
+    const s = outputStreamRef.current;
+    if (el && s && el.srcObject !== s) {
+      el.srcObject = s;
+      el.play().catch(() => {});
     }
-  }, [outputStream]);
+  }, []);
 
   // --- Cleanup, tab-hidden pause, un-uploaded warning ---
   useEffect(() => {
@@ -873,7 +882,7 @@ function StagePage() {
           <div className="relative aspect-video overflow-hidden rounded-2xl border border-[#2A2A35] bg-black">
 
             <video
-              ref={outputVideoRef}
+              ref={attachOutputVideo}
               className="h-full w-full object-cover"
               autoPlay
               playsInline
@@ -894,7 +903,7 @@ function StagePage() {
               className={`absolute right-3 top-3 h-36 w-64 overflow-hidden rounded-lg border border-[#2A2A35] bg-black shadow-lg transition-opacity ${hudVisible ? "opacity-100" : "pointer-events-none opacity-0"}`}
             >
               <video
-                ref={inputVideoRef}
+                ref={attachInputVideo}
                 className="h-full w-full -scale-x-100 object-cover"
                 autoPlay
                 playsInline
