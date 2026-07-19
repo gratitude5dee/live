@@ -719,6 +719,9 @@ function StagePage() {
       });
       transportRef.current = t;
       await t.start();
+      // If a preset was pre-selected before connect (e.g. from Choose Your
+      // Reality), swap in the compositor track now that the sender exists.
+      syncOutboundSource();
 
       // Queue initial state until Lucy's WebRTC control channel opens.
       t.send({ prompt: "", enable_prompt_expansion: false });
