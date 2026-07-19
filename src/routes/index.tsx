@@ -98,6 +98,7 @@ function StagePage() {
   const revertTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastGestureResultRef = useRef<GestureRecognizerResult | null>(null);
   const lastHoldRef = useRef<number>(0);
+  const inferenceFrameRef = useRef<number | null>(null);
 
   // --- Anonymous auth on mount ---
   useEffect(() => {
@@ -441,7 +442,7 @@ function StagePage() {
       transportRef.current = t;
       await t.start();
 
-      // Prime the connection with an empty prompt (no-op for the model)
+      // Queue initial state until Lucy's WebRTC control channel opens.
       t.send({ prompt: "", enable_prompt_expansion: false });
 
       // QR code for remote
@@ -470,9 +471,12 @@ function StagePage() {
     let slowStreak = 0;
     let everyN = 2;
     let last = performance.now();
+    let lastTimestamp = 0;
+    let fatal = false;
     const loop = () => {
+      if (fatal) return;
       if (!inputVideoRef.current) {
-        requestAnimationFrame(loop);
+        inferenceFrameRef.current = requestAnimationFrame(loop);
         return;
       }
       frame++;
@@ -494,9 +498,13 @@ function StagePage() {
         inputVideoRef.current.readyState >= 2 &&
         inputVideoRef.current.videoWidth > 0
       ) {
-        const ts = Math.round(performance.now());
+        const ts = Math.max(lastTimestamp + 1, Math.round(performance.now()));
+        lastTimestamp = ts;
+        // MediaPipe tasks share WASM resources. Alternate them rather than
+        // invoking two task graphs against the same video frame back-to-back.
+        const runGesture = frame % (everyN * 2) === 0;
         try {
-          if (gestureRef.current && engineRef.current) {
+          if (runGesture && gestureRef.current && engineRef.current) {
             const result = gestureRef.current.recognizeForVideo(
               inputVideoRef.current,
               ts,
@@ -504,16 +512,14 @@ function StagePage() {
             engineRef.current.ingest(result);
             lastGestureResultRef.current = result;
           }
-        } catch (e) {
-          console.warn("gesture inference error", e);
-        }
-        try {
-          if (faceRef.current && faceEngineRef.current) {
-            const fr = faceRef.current.detectForVideo(inputVideoRef.current, ts + 1);
+          } else if (!runGesture && faceRef.current && faceEngineRef.current) {
+            const fr = faceRef.current.detectForVideo(inputVideoRef.current, ts);
             faceEngineRef.current.ingest(fr);
           }
         } catch (e) {
-          console.warn("face inference error", e);
+          const message = String((e as Error)?.message ?? e);
+          console.warn("vision inference stopped", e);
+          if (message.includes("memory access out of bounds")) fatal = true;
         }
 
         // Paint hand overlay onto PiP overlay canvas
@@ -528,9 +534,12 @@ function StagePage() {
           if (ctx) drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
         }
       }
-      requestAnimationFrame(loop);
+      inferenceFrameRef.current = requestAnimationFrame(loop);
     };
-    requestAnimationFrame(loop);
+    if (inferenceFrameRef.current !== null) {
+      cancelAnimationFrame(inferenceFrameRef.current);
+    }
+    inferenceFrameRef.current = requestAnimationFrame(loop);
   }, []);
 
   // --- Record / snapshot / upload ---
@@ -692,6 +701,10 @@ function StagePage() {
       if (hideTimer) clearTimeout(hideTimer);
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
+      if (inferenceFrameRef.current !== null) {
+        cancelAnimationFrame(inferenceFrameRef.current);
+        inferenceFrameRef.current = null;
+      }
       transportRef.current?.close();
       recorderRef.current?.stop();
       gestureRef.current?.close();
