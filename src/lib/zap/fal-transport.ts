@@ -29,10 +29,13 @@ export class VideoTransport {
   private cb: TransportCallbacks;
   private pc: RTCPeerConnection | null = null;
   private videoSender: RTCRtpSender | null = null;
+  private pendingTrack: MediaStreamTrack | null = null;
   private connection: LucyRealtimeConnection | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
   private outboundPaused = false;
+  private remoteDescriptionSet = false;
+  private pendingRemoteCandidates: RTCIceCandidateInit[] = [];
   private lastPrompt: {
     prompt: string;
     enable_prompt_expansion?: boolean;
@@ -56,11 +59,23 @@ export class VideoTransport {
   /**
    * Hot-swap the outbound video track without renegotiating SDP.
    * Same-kind swap (video → video) is supported natively by WebRTC.
+   * If the sender doesn't exist yet (called before start()), the track is
+   * queued and applied once the peer connection is created.
    */
   async replaceVideoTrack(track: MediaStreamTrack | null) {
-    if (!this.videoSender) return;
+    if (!this.videoSender) {
+      this.pendingTrack = track;
+      return;
+    }
     if (this.videoSender.track && track && this.videoSender.track.id === track.id) return;
     try {
+      if (track) {
+        try {
+          (track as MediaStreamTrack & { contentHint?: string }).contentHint = "detail";
+        } catch {
+          /* older UAs */
+        }
+      }
       await this.videoSender.replaceTrack(track);
       if (track) track.enabled = !this.outboundPaused;
     } catch (error) {
