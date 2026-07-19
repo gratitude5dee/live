@@ -46,6 +46,28 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
 
   return (
     <div className="relative w-full bg-[#050505] text-[#FAFAFA]">
+      {/* Ghost cursor trail — full-viewport overlay */}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0"
+        style={{ zIndex: 40 }}
+      >
+        <GhostCursor
+          color="#B497CF"
+          brightness={1}
+          edgeIntensity={0}
+          trailLength={50}
+          inertia={0.5}
+          grainIntensity={0.05}
+          bloomStrength={0.1}
+          bloomRadius={1.0}
+          bloomThreshold={0.025}
+          fadeDelayMs={1000}
+          fadeDurationMs={1500}
+          mixBlendMode="screen"
+          zIndex={40}
+        />
+      </div>
       {/* Bubble menu — pinned top */}
       <BubbleMenu
         useFixedPosition
