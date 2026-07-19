@@ -441,7 +441,7 @@ function StagePage() {
       transportRef.current = t;
       await t.start();
 
-      // Kick off with a no-op prompt so frame mode has something to send
+      // Prime the connection with an empty prompt (no-op for the model)
       t.send({ prompt: "", enable_prompt_expansion: false });
 
       // QR code for remote
