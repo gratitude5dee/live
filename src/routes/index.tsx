@@ -511,7 +511,6 @@ function StagePage() {
             );
             engineRef.current.ingest(result);
             lastGestureResultRef.current = result;
-          }
           } else if (!runGesture && faceRef.current && faceEngineRef.current) {
             const fr = faceRef.current.detectForVideo(inputVideoRef.current, ts);
             faceEngineRef.current.ingest(fr);
