@@ -184,21 +184,40 @@ export default function DesktopStage(p: StageViewProps) {
               playsInline
               muted
             />
+            {/* Depth preview — same feed sent to Lucy when Depth is on */}
+            {p.depthOn && p.depthStream && (
+              <DepthVideo stream={p.depthStream} />
+            )}
             <canvas
               ref={p.overlayRef as React.RefObject<HTMLCanvasElement>}
               className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
             />
+            {/* Source badge — what Lucy is currently receiving */}
+            <div className="absolute left-2 top-2 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-white/70 backdrop-blur-xl">
+              <span className={
+                p.activeSource === "depth" ? "text-cyan-200"
+                : p.activeSource === "composite" ? "text-fuchsia-200"
+                : "text-emerald-200"
+              }>●</span>{" "}
+              {p.activeSource}
+            </div>
             <button
               onClick={p.toggleDepth}
               disabled={!p.depthAvailable || p.depthLoading}
-              title={p.depthAvailable ? "Toggle WebGPU depth stream to Lucy" : "WebGPU not available"}
+              title={p.depthAvailable ? "Toggle WebGPU depth stream to Lucy" : "WebGPU required — open in Chrome/Edge desktop"}
               className={`absolute right-2 top-2 rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] backdrop-blur-xl transition disabled:opacity-40 ${
                 p.depthOn
                   ? "border-cyan-300/60 bg-cyan-400/25 text-cyan-100"
                   : "border-white/15 bg-black/60 text-white/70 hover:bg-white/10"
               }`}
             >
-              {p.depthLoading ? `Depth ${p.depthProgress}%` : p.depthOn ? "Depth · on" : "Depth"}
+              {p.depthLoading
+                ? `Depth ${p.depthProgress}%`
+                : p.depthOn
+                  ? "Depth · on"
+                  : p.depthAvailable
+                    ? "Depth"
+                    : "Depth · n/a"}
             </button>
             {!p.facePresent && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-[11px] text-amber-300">
