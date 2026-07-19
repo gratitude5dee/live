@@ -1,72 +1,70 @@
-## Assumption
 
-You didn't paste a specific stack trace, so I'm reading "streaming errors" as the class of issues we've been hitting on the Lucy pipeline (blurry / stalled output, occasional 422 / signaling races, PiP not populating). If there's a specific error string in your console right now, paste it and I'll narrow the plan.
+## What's actually happening
 
-## Part 1 — Streaming scan & fixes
+I traced both symptoms to wiring in `src/routes/index.tsx`, `src/lib/zap/composite-stream.ts`, and the two stage views.
 
-Targeted pass across `src/routes/index.tsx`, `src/lib/zap/fal-transport.ts`, and `src/lib/zap/composite-stream.ts`:
+**1. Mobile playback quality / proportions**
 
-1. **Track-swap safety** (`fal-transport.ts`)
-   - `replaceVideoTrack` is called before `videoSender` exists on early preset selection. Guard the pre-connect case by queuing the desired track and applying it once `pc.addTrack` runs.
-   - When swapping to a canvas track, set `contentHint = "detail"` on the outbound track so the encoder favors sharpness over motion smoothing.
+- `startSession()` builds a `CompositeStream` (1080×1920 canvas re-encode at 30 fps) **eagerly**, right after camera start, even for "clean camera" presets. On mobile Safari the extra canvas draw + `captureStream` chews CPU and heats the device, and any time a Character-Swap / Gesture-FX preset gets pre-selected from the landing wheel we hot-swap Lucy over to that re-encoded track — that's the visibly softer feed.
+- `getUserMedia` requests `width 1080 / height 1920 / aspectRatio 9:16`. iOS Safari commonly downgrades to ~480p when it can't satisfy that exact combo, and Android front cams often return landscape frames that then get letter-boxed by the compositor's center-crop. The result is the "off-proportion, blurry" feed the user sees.
+- The mobile PiP forces the raw video into an 80×112 box with `object-cover -scale-x-100`, which mis-crops rear-camera (`facingMode: environment`) shots.
 
-2. **Compositor start ordering** (`routes/index.tsx`)
-   - The compositor is built after `getUserMedia` but the `inputVideoRef` may not have attached yet on first paint (callback ref races the `startSession` flow). Await `inputVideoRef.current` via a small `waitForRef` before constructing `CompositeStream`; today it can silently fall back to "clean camera only".
-   - On `stopSession`, stop the compositor + all tracks before nulling refs (currently order-dependent → occasional "InvalidStateError: sender removed").
+**2. Depth toggle doesn't appear to do anything**
 
-3. **WebRTC signaling** (`fal-transport.ts`)
-   - Buffer ICE candidates generated before `setRemoteDescription` completes; today they fire into `connection.send` before Lucy's answer is applied, which the server ignores → longer connect times.
-   - Add a single `pc.close()` guard in `onError` so a failed handshake doesn't leak a peer connection that keeps sending candidates.
+- `toggleDepth()` only calls `syncOutboundSource()` — it swaps the WebRTC track sent to Lucy but never changes the on-screen PiP, which still shows `inputStreamRef` (raw camera). The user has no visual confirmation the depth map is active, and Lucy's remapped output looks similar enough at a glance that it reads as "not working".
+- On mobile Safari (< iOS 26), `navigator.gpu` is undefined, so `depthAvailable` is `false` and the button is silently disabled with no explanation.
 
-4. **Token mint** (`fal-token.functions.ts`)
-   - Duration is 120s but the client only refreshes on reconnect. Keep 120s but surface a specific error string when 422 recurs so it stops being swallowed as a generic "connecting" state.
+## Changes
 
-5. **Recording resilience** (`routes/index.tsx`)
-   - MediaRecorder currently starts on `onOutputStream`. If the output track ends mid-recording (Lucy hiccup), the blob is truncated with no user feedback. Add an `onended` handler that finalizes the current take and prompts a re-arm.
+All frontend only. Business logic (Supabase, fal transport, prompt engine) is untouched.
 
-No schema, no UI changes for Part 1.
+### A. Make the depth stream visible in the camera PiP
 
-## Part 2 — Depth toggle (WebGPU + Transformers.js → Lucy)
+`src/components/zap/stage/types.ts`
+- Add `depthStream: MediaStream | null` to `StageViewProps`.
 
-### UX
-- Add a small pill button labeled **"Depth"** to the top-right of the camera PiP card in both `DesktopStage.tsx` and `MobileStage.tsx`.
-- States: `off` (default, ghost border), `loading` (spinner while the model warms up), `on` (solid accent, live).
-- When `on`, the outbound Lucy track becomes the depth-map canvas; when `off`, we revert to the current preset-driven source (raw camera or MediaPipe composite).
-- Disabled with a tooltip on browsers without `navigator.gpu`.
+`src/routes/index.tsx`
+- Track `depthStream` state; set it when `DepthEngine` initializes, clear on stop. Pass down to both stages.
 
-### Pipeline
-- Package: `@huggingface/transformers` (installed via `bun add`).
-- Model: `onnx-community/depth-anything-v2-small` on `device: "webgpu"`, `dtype: "fp16"` — matches the referenced Xenova space and runs ~30 FPS on discrete GPUs, ~10–15 on integrated.
-- Warm-up happens on first toggle; the button shows a progress percentage from the `progress_callback` so the user sees model-download state.
+`src/components/zap/stage/DesktopStage.tsx` and `MobileStage.tsx`
+- In the camera PiP, render a second `<video>` layered over the raw camera video, `srcObject = depthStream`, only visible when `depthOn`. This is the same feed being sent to Lucy, so what you see == what Lucy gets.
+- Change the "D" pill to a fuller "Depth" label with three states: `unavailable` (tooltip: "WebGPU required — open in Chrome/Edge desktop"), `loading NN%`, `on`.
+- Small "Sending: raw / composite / depth" badge in the PiP corner so mobile users can confirm the outbound source without guessing.
 
-### New module: `src/lib/zap/depth-engine.ts`
-- Class `DepthEngine` with:
-  - `init()` — lazy-loads the pipeline; feature-detects `navigator.gpu`, throws a typed `WebGPUUnsupportedError` otherwise.
-  - `attach(sourceVideo, { fps = 24, targetAspect = 9/16, targetHeight = 1920 })` — creates a hidden canvas, runs a rAF loop that grabs a downscaled RawImage (e.g. 384×384) from the video, runs the depth pipeline, and blits the normalized depth (grayscale, near = white) upscaled + center-cropped onto the output canvas.
-  - `stream: MediaStream` — via `canvas.captureStream(fps)`.
-  - `stop()` — cancels rAF, stops tracks, disposes tensors.
-- Uses an in-flight guard so we never queue overlapping inferences (drops frames instead of stacking latency).
+### B. Cut the compositor out of the "clean camera" path on mobile
 
-### New source kind in `routes/index.tsx`
-- Add `"depth"` to the outbound-source selection alongside `"other" | "character_swap" | "gesture_fx"`.
-- `syncOutboundSource()` picks the depth canvas track when `depthOn` is true, regardless of active preset kind.
-- On toggle-on: init engine, hot-swap track via `transport.replaceVideoTrack(depthEngine.stream.getVideoTracks()[0])`, and append a small prompt hint (e.g. "Interpret the input as a depth map; treat brighter regions as closer to camera.") to whatever preset prompt is active, so Lucy uses the depth cue instead of trying to render literal grayscale. On toggle-off: restore previous prompt and revert the track.
+`src/routes/index.tsx`
+- Delete the eager `new CompositeStream(...)` in `startSession()`.
+- Build the compositor lazily inside `syncOutboundSource()`, only when `activePresetKindRef.current` is `character_swap` or `gesture_fx`. Dispose it (and null the ref) when swapping back to `"other"` or when depth turns on. This means clean-camera presets and freeform prompts always send the raw `MediaStreamTrack` from `getUserMedia` — no canvas re-encode.
 
-### PiP overlay
-- When Depth is `on`, also render a tiny depth-map preview inside the PiP (bottom-right corner) so the user can see what Lucy is receiving.
+### C. Fix mobile capture constraints and PiP framing
 
-### Files touched
-- `src/lib/zap/fal-transport.ts` — track-swap queueing, ICE buffering, close guard, `contentHint`.
-- `src/lib/zap/composite-stream.ts` — no changes expected.
-- `src/routes/index.tsx` — `depthOn` state, engine wiring, prompt augmentation, source selection.
-- `src/components/zap/stage/types.ts` — add `depthOn`, `depthLoading`, `toggleDepth` to `StageViewProps`.
-- `src/components/zap/stage/DesktopStage.tsx` + `MobileStage.tsx` — Depth pill on the PiP.
-- **New** `src/lib/zap/depth-engine.ts`.
-- `package.json` — `@huggingface/transformers`.
+`src/routes/index.tsx`
+- Rewrite `getUserMedia` constraints to be iOS-friendly:
+  - Drop the `aspectRatio` hint.
+  - Use `{ width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 }, facingMode }` on mobile (native portrait framing kicks in automatically), and `{ width: { ideal: 1920 }, height: { ideal: 1080 } }` on desktop. Detect via `useIsMobile`'s underlying media query at start time.
+- After `getUserMedia`, read the actual track settings and, if the phone gave us a landscape frame with a front camera, rotate the compositor's target aspect to match rather than center-cropping.
 
-### Deployment note
-Transformers.js runs entirely in-browser (WebGPU + WASM fallback) and downloads the ONNX weights from the HF CDN on first use — no server functions, no new secrets.
+`src/components/zap/stage/MobileStage.tsx`
+- Enlarge the PiP to a portrait `w-24 h-32` and use `object-contain` when `facingMode === "environment"` so the rear-camera frame isn't cropped weirdly.
+- Add the depth overlay described in (A).
+
+### D. Small hardening
+
+`src/lib/zap/composite-stream.ts`
+- Add a `dispose()` alias for `stop()` and null out the source ref so the lazy re-create in (B) doesn't leak.
+
+`src/routes/index.tsx` (`stopSession`)
+- Ensure compositor and depth engine are disposed and `syncOutboundSource()` is called with a null active preset so the sender doesn't hold a dead canvas track.
+
+## Verification
+
+- Load `/` on desktop Chrome, click "Zap Live", pick a **freeform prompt** — PiP badge reads `raw`, Lucy playback should be visibly sharper than before (no re-encode).
+- Pick **YE** (character_swap) — badge flips to `composite`, face landmarks bake in.
+- Toggle **Depth** — PiP swaps to the grayscale depth map, badge reads `depth`, Lucy repaints from the depth stream.
+- Load on iPhone Safari — camera comes up in native portrait, PiP shows correct crop, "Depth" pill is greyed with the tooltip.
 
 ## Out of scope
-- Falling back to WASM depth if WebGPU is missing (button is simply disabled, matching the reference space).
-- Fine-tuning the "depth" preset — we ship a sensible default prompt and let the user layer their own on top.
+
+- No changes to fal transport, Supabase schema, prompt templates, or landing page.
+- Not migrating depth to a mobile-friendly backend (would require a WASM/CPU fallback pipeline — separate follow-up).
