@@ -1,9 +1,16 @@
-## Hero refinement
+## Hero layout adjustment
 
-**File:** `src/components/zap/LandingHero.tsx`
+Reorder the hero column in `src/components/zap/LandingHero.tsx` so the glass "Zap Live" CTA sits directly beneath the ASCII wordmark.
 
-1. Remove the `ZAP · LIVE` pill (lines 124–126) from above the Strands/ASCII block, where it currently floats at the very top of the hero.
-2. Re-mount the same pill directly beneath the `ASCIIText` wordmark, sitting above the tagline paragraph. Keep the identical `ShinyText` styling (color `#8a8f98`, shine `#ffffff`, uppercase `.28em` tracking, rounded glass border) so the badge reads as a label anchored to "Zap!".
-3. Tighten spacing so the stack reads: `Zap!` ASCII → pill (`mt-2 md:mt-4`) → tagline (`mt-4 md:mt-6`) → glass CTA. No other layout, background, or Strands changes.
+New vertical order under the `Strands` centerpiece:
+1. `ASCIIText` "Zap!" wordmark
+2. Glass CTA button ("Zap Live") — moved up, tighter top margin
+3. "ZAP · LIVE" pill — moved below the CTA
+4. Tagline paragraph ("Create your reality in realtime…")
+5. "Uses your camera…" fine print
 
-Result: the pill functions as a caption under the wordmark instead of a stray chip in the top gutter, matching the annotated screenshot.
+### Technical notes
+- Single-file change: `src/components/zap/LandingHero.tsx`.
+- Move the `GlassSurface` block (lines ~159–197) to immediately follow the ASCII container (line ~141).
+- Adjust top margins: CTA `mt-6 md:mt-8`, pill `mt-4`, tagline `mt-6`, keep fine print `mt-6`.
+- No prop, state, or logic changes; purely presentational reorder.

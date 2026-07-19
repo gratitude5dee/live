@@ -140,23 +140,8 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
             <ASCIIText text="Zap!" enableWaves asciiFontSize={8} planeBaseHeight={8} />
           </div>
 
-          <span className="relative z-10 mt-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.28em] backdrop-blur md:mt-4">
-            <ShinyText text="ZAP · LIVE" color="#8a8f98" shineColor="#ffffff" speed={5} spread={140} />
-          </span>
-
-          <p className="relative z-10 mt-4 max-w-xl whitespace-pre-line px-2 text-center text-sm sm:text-base md:mt-6 md:text-lg">
-            <ShinyText
-              text={"Create your reality in realtime with Zap!\nBuilt for streamers, digital shop sellers, and wizards looking to\nbend their reality."}
-              color="#7c8291"
-              shineColor="#ffffff"
-              speed={6}
-              spread={150}
-            />
-          </p>
-
-
-          {/* Glass CTA */}
-          <div className="relative z-10 mt-12">
+          {/* Glass CTA — directly beneath the wordmark */}
+          <div className="relative z-10 mt-6 md:mt-8">
             <GlassSurface
               width={240}
               height={72}
@@ -196,9 +181,24 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
             </GlassSurface>
           </div>
 
+          <span className="relative z-10 mt-4 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.28em] backdrop-blur">
+            <ShinyText text="ZAP · LIVE" color="#8a8f98" shineColor="#ffffff" speed={5} spread={140} />
+          </span>
+
+          <p className="relative z-10 mt-6 max-w-xl whitespace-pre-line px-2 text-center text-sm sm:text-base md:text-lg">
+            <ShinyText
+              text={"Create your reality in realtime with Zap!\nBuilt for streamers, digital shop sellers, and wizards looking to\nbend their reality."}
+              color="#7c8291"
+              shineColor="#ffffff"
+              speed={6}
+              spread={150}
+            />
+          </p>
+
           <p className="relative z-10 mt-6 text-xs text-white/40">
             Uses your camera. Runs entirely in your browser.
           </p>
+
         </div>
       </div>
 
