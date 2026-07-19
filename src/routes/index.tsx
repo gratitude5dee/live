@@ -522,14 +522,15 @@ function StagePage() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: { ideal: 720 },
-          height: { ideal: 1280 },
+          width: { ideal: 1080 },
+          height: { ideal: 1920 },
           aspectRatio: { ideal: 9 / 16 },
-          frameRate: 30,
+          frameRate: { ideal: 30 },
           facingMode,
         },
         audio: false,
       });
+
       inputStreamRef.current = stream;
       if (inputVideoRef.current) {
         inputVideoRef.current.srcObject = stream;
