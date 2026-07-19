@@ -1,32 +1,37 @@
-## Goal
 
-Stop baking the MediaPipe **face mesh** into every outbound frame to Lucy. Face landmarks should only be composited when the active preset is a **character-swap** style (where face geometry helps Lucy re-identify the subject). For all other presets (backgrounds, try-on, object add-in, effects like Fire Hands, stylizations), Lucy should receive **hand overlays only** — no face lines. Hand overlays remain always-on since gestures drive edits.
+## 1. Cleaner outbound stream to Lucy
 
-Also fix the composite canvas so its aspect ratio matches the 9:16 output pipeline instead of raw `videoWidth/Height` (which is landscape on most webcams and causes the letterboxed / distorted face proportions visible in Lucy's repaint).
+The composite currently bakes hand landmarks (always) and face landmarks (character-swap only) into the 720×1280 canvas sent to Lucy. That's why the output looks noisy/blurry.
 
-## Changes
+- `src/lib/zap/composite-stream.ts` — bump target to 1080×1920 (Lucy still downsamples but we hand it a crisper source), keep 30fps.
+- `src/routes/index.tsx` — stop baking hand landmarks into the outbound stream. The compositor's `draw` callback becomes a no-op unless the active preset is `character_swap` (then draw face mesh only). Hand/face overlays continue to render into the PiP overlay canvas for user feedback — nothing changes visually in the Camera card.
 
-### 1. Tag character-swap presets
-- In the seed migration / preset rows, add a boolean-ish marker. Simplest: reuse existing `template_key` / `kind` — mark presets whose *intent* is character identity swap with `template_key = 'character_swap'` (or add a new `tags: string[]` column via migration).
-- Curated character-swap presets to flag: **Streamer**, **Hooded Windbreaker**, **Leather Vest**, **Pink Stripe Kit** (person-centric identity swaps). Backgrounds (Beach, Neon City, NFL Night, Soccer Daylight), stylizations (Anime, Watercolor, Sketch, Cyberpunk, Clean Studio), and effects (Fire Hands, Crown, Try-On, Object add-in) are **not** character-swap.
+Net effect: Lucy receives a clean, center-cropped 9:16 video with no baked overlays for normal presets, only a face mesh when re-identification actually needs it.
 
-### 2. Route active preset kind into the compositor
-- `src/routes/index.tsx`: keep a ref `activePresetKindRef` updated whenever `applyPreset` / template dialogs run. Values: `'character_swap' | 'other'`.
-- Update the `CompositeStream` draw callback (line 611-622) to only call `drawFaceOverlay(...)` when `activePresetKindRef.current === 'character_swap'`. `drawHandOverlay` still always runs.
-- The PiP HUD overlay (line 778-779) keeps drawing both face + hands regardless — that's user-facing feedback and unrelated to Lucy's input.
+## 2. Redesign the left preset rail
 
-### 3. Fix compositor proportions (9:16)
-- `src/lib/zap/composite-stream.ts`: instead of copying `videoWidth/Height`, lock the canvas to a portrait target (e.g. 720×1280) and draw the source video with `object-cover` math — center-crop the widest dimension so the subject stays framed and the output aspect matches the recording / Lucy 9:16 pipeline.
-- Add an optional `targetAspect` constructor arg (default `9/16`) so we can tune without further changes.
+Current rows visibly clip the preset name (top half cut off) and the subtitle bleeds into the next row.
 
-### 4. No changes to
-- `overlay.ts` drawing routines
-- `fal-transport.ts`
-- Face engine / gesture engine loops
-- Recording pipeline (already 9:16)
+- `src/components/zap/stage/DesktopStage.tsx` `PresetRow`:
+  - Give each row a defined min-height, `items-center`, and remove the two-line stacked label — one line, `truncate`, with a small right-aligned badge for shortcut / "drop image".
+  - Slightly smaller thumbnail (h-10 w-10), consistent padding, tighter `gap-2` list spacing.
+  - Add a section separator between "Templates" (kind === 'template') and standard presets so the dashed template rows read as their own group.
+  - Rail width 260 → 240px; keep scroll but ensure last row isn't clipped by parent (add `pb-2` inside scroll region).
 
-## Technical notes
+Purely presentational — no store or data changes.
 
-- `activePresetKindRef` avoids re-instantiating the compositor on preset change — the ref is read fresh every frame inside the draw callback.
-- Center-crop math: `const scale = Math.max(cw/vw, ch/vh); const dw = vw*scale; const dh = vh*scale; ctx.drawImage(v, (cw-dw)/2, (ch-dh)/2, dw, dh);`
-- Migration is idempotent: `UPDATE public.presets SET template_key='character_swap' WHERE name IN (...);` — safe to re-run.
+## 3. New "Object Replace" template preset
+
+Follows the same drop-image + auto-prompt pattern as Object add-in / Try-on.
+
+- `src/lib/zap/prompt-templates.ts`:
+  - Add `object_replace` to `TemplateKey`.
+  - `buildTemplatePrompt('object_replace', { detail, placement })` returns a Lucy "Add/Replace" prompt: replaces the object the person is holding (or the target region) with the reference image, matching size/lighting, identity+background unchanged.
+  - Add matching `TEMPLATE_META` entry (placement label: "What to replace", placeholder: "e.g. the phone in the person's hand"; detail placeholder: "e.g. the plush green backpack from the reference image").
+- DB migration (single statement, additive): insert one row into `presets` with `kind='template'`, `template_key='object_replace'`, name "Object replace", emoji 🔄, `requires_ref=false` (image comes from the dialog, not the ref slot).
+- `TemplateDialog.tsx` — no changes required; it already renders any key present in `TEMPLATE_META` and uploads the dropped image via the existing `onApply` path in `src/routes/index.tsx`.
+
+## Out of scope
+
+- No changes to fal transport, MediaPipe engines, or PiP overlay rendering.
+- No mobile stage changes (all three fixes are desktop-visible; template preset appears on mobile automatically via shared preset list).
