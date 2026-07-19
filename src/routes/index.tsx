@@ -623,12 +623,16 @@ function StagePage() {
           const compositor = new CompositeStream(
             src,
             (ctx, _w, _h) => {
-              // Send a clean, center-cropped 9:16 stream to Lucy. Only bake
-              // the face mesh when a character-swap preset actually needs it
-              // for identity re-projection. Hand/face overlays still render
-              // into the on-screen PiP canvas for user feedback.
-              if (activePresetKindRef.current === "character_swap") {
+              // Send a clean, center-cropped 9:16 stream to Lucy. Bake the
+              // face mesh only for character-swap presets (identity lock) and
+              // bake hand landmarks only for gesture-FX presets (effect
+              // anchoring). Everything else sends a clean webcam frame.
+              // The on-screen PiP still shows both overlays for user feedback.
+              const kind = activePresetKindRef.current;
+              if (kind === "character_swap") {
                 drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+              } else if (kind === "gesture_fx") {
+                drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
               }
             },
             { fps: 30, targetAspect: 9 / 16, targetHeight: 1920 },
