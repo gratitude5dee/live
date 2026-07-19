@@ -619,9 +619,11 @@ function StagePage() {
                 lastGestureResultRef.current,
                 lastHoldRef.current,
               );
-              drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+              if (activePresetKindRef.current === "character_swap") {
+                drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+              }
             },
-            30,
+            { fps: 30, targetAspect: 9 / 16, targetHeight: 1280 },
           );
           compositorRef.current = compositor;
           outboundStream = compositor.stream;
