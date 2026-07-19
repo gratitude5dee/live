@@ -1,6 +1,7 @@
 import LiquidEther from "@/components/reactbits/LiquidEther";
 import Strands from "@/components/reactbits/Strands";
 import GlassSurface from "@/components/reactbits/GlassSurface";
+import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
 
 interface LandingHeroProps {
   onEnter: () => void;
@@ -35,7 +36,22 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
       />
 
       <div className="relative mx-auto flex min-h-[100dvh] max-w-6xl flex-col items-center justify-center px-6 py-24">
-        {/* Eyebrow */}
+        {/* WZRD.tech brand lockup */}
+        <a
+          href="https://wzrd.tech"
+          target="_blank"
+          rel="noreferrer"
+          className="relative z-20 mb-10 block transition-opacity hover:opacity-90"
+          aria-label="WZRD.tech"
+        >
+          <img
+            src={wzrdLogo.url}
+            alt="WZRD.tech"
+            width={220}
+            height={62}
+            className="h-10 w-auto drop-shadow-[0_0_28px_rgba(59,130,246,0.35)] md:h-12"
+          />
+        </a>
         <span className="mb-8 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.28em] text-white/70 backdrop-blur">
           ZAP · LIVE
         </span>
