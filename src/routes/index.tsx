@@ -1227,14 +1227,29 @@ function StagePage() {
           <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
             {presets.map((p, i) => {
               const hasThumb = !!p.thumbnail_url;
-              const disabled = p.requires_ref && !p.ref_image_url && !refImage;
+              const kind = (p as unknown as { kind?: string }).kind ?? "preset";
+              const templateKey = (p as unknown as { template_key?: TemplateKey })
+                .template_key;
+              const isTemplate = kind === "template" && !!templateKey;
+              const disabled =
+                !isTemplate && p.requires_ref && !p.ref_image_url && !refImage;
               return (
                 <button
                   key={p.id}
-                  onClick={() => applyPreset(p)}
+                  onClick={() => {
+                    if (isTemplate && templateKey) {
+                      setTemplateDialog({ key: templateKey, name: p.name });
+                    } else {
+                      applyPreset(p);
+                    }
+                  }}
                   disabled={disabled}
-                  className="group relative flex min-w-[84px] flex-col items-center gap-1 overflow-hidden rounded-xl border border-[#2A2A35] bg-[#16161D] text-xs transition hover:border-[#22D3EE] disabled:opacity-40"
-                  title={`${p.name} (${i < 9 ? i + 1 : 0})`}
+                  className={`group relative flex min-w-[84px] flex-col items-center gap-1 overflow-hidden rounded-xl border text-xs transition disabled:opacity-40 ${
+                    isTemplate
+                      ? "border-dashed border-[#E879F9]/60 bg-[#16161D] hover:border-[#E879F9]"
+                      : "border-[#2A2A35] bg-[#16161D] hover:border-[#22D3EE]"
+                  }`}
+                  title={`${p.name}${isTemplate ? " · drop an image" : ` (${i < 9 ? i + 1 : 0})`}`}
                 >
                   {hasThumb ? (
                     <div className="relative h-14 w-full overflow-hidden">
@@ -1248,7 +1263,14 @@ function StagePage() {
                       </span>
                     </div>
                   ) : (
-                    <span className="mt-2 text-xl">{p.emoji}</span>
+                    <div className="relative mt-2 flex flex-col items-center">
+                      <span className="text-xl">{p.emoji}</span>
+                      {isTemplate && (
+                        <span className="absolute -right-3 -top-1 rounded bg-[#E879F9]/20 px-1 text-[9px] text-[#E879F9]">
+                          📥
+                        </span>
+                      )}
+                    </div>
                   )}
                   <span className="px-2 pb-1.5 text-[#9CA3AF] truncate max-w-[84px]">{p.name}</span>
                 </button>
