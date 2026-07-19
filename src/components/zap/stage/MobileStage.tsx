@@ -120,7 +120,9 @@ export default function MobileStage(p: StageViewProps) {
       >
         <video
           ref={p.attachInputVideo}
-          className="h-full w-full -scale-x-100 object-cover"
+          className={`h-full w-full -scale-x-100 object-cover ${
+            p.depthOn && p.depthStream ? "invisible" : ""
+          }`}
           autoPlay
           playsInline
           muted
@@ -128,10 +130,12 @@ export default function MobileStage(p: StageViewProps) {
         {p.depthOn && p.depthStream && <DepthVideo stream={p.depthStream} />}
         <canvas
           ref={p.overlayRef as React.RefObject<HTMLCanvasElement>}
-          className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
+          className={`pointer-events-none absolute inset-0 z-20 h-full w-full -scale-x-100 ${
+            p.depthOn ? "hidden" : ""
+          }`}
         />
         {/* Source badge */}
-        <div className="absolute left-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[8px] uppercase tracking-widest backdrop-blur-xl">
+        <div className="absolute left-1 top-1 z-30 rounded-full bg-black/70 px-1.5 py-0.5 text-[8px] uppercase tracking-widest backdrop-blur-xl">
           <span className={
             p.activeSource === "depth" ? "text-cyan-300"
             : p.activeSource === "composite" ? "text-fuchsia-300"
@@ -146,7 +150,7 @@ export default function MobileStage(p: StageViewProps) {
           }}
           disabled={!p.depthAvailable || p.depthLoading}
           title={p.depthAvailable ? "Toggle depth" : "WebGPU required — try Chrome/Edge desktop"}
-          className={`absolute right-1 top-1 rounded-full px-1.5 py-0.5 text-[8px] uppercase tracking-widest backdrop-blur-xl disabled:opacity-40 ${
+          className={`absolute right-1 top-1 z-30 rounded-full px-1.5 py-0.5 text-[8px] uppercase tracking-widest backdrop-blur-xl disabled:opacity-40 ${
             p.depthOn ? "bg-cyan-400/30 text-cyan-100" : "bg-black/60 text-white/80"
           }`}
         >
