@@ -1,5 +1,5 @@
 import type { RefCallback } from "react";
-import type { ConnectionState, Preset, PromptState } from "@/lib/zap/types";
+import type { ConnectionState, Preset, PromptState, VoiceState } from "@/lib/zap/types";
 import type { TemplateKey } from "@/lib/zap/prompt-templates";
 
 export type LiveGesture = { label: string | null; score: number; hold: number };
@@ -68,6 +68,15 @@ export interface StageViewProps {
 
   // which stream is currently being sent to Lucy — for on-screen confirmation
   activeSource: "raw" | "composite" | "depth";
+
+  // Computah voice control
+  voiceState: VoiceState;
+  voiceTranscript: string;
+  voiceAck: string;
+  voiceIntent: string | null;
+  voiceIntentLabel: string | null;
+  voiceAvailable: boolean;
+  toggleVoice: () => void;
 
   // baked-landmark compositor toggle (character_swap / gesture_fx only)
   bakeLandmarks: boolean;

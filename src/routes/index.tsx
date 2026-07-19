@@ -23,7 +23,10 @@ import {
   type Preset,
   type PromptState,
   type RemoteMessage,
+  type VoiceState,
 } from "@/lib/zap/types";
+import { VoiceAgent, isVoiceSupported, type VoiceToolCall } from "@/lib/zap/voice-agent";
+import { isEditTypeId, editLabel, type EditTypeId } from "@/lib/zap/voice-intent";
 import type {
   FaceLandmarker,
   GestureRecognizer,
@@ -82,6 +85,12 @@ function StagePage() {
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
   const [download, setDownload] = useState<{ url: string; filename: string } | null>(null);
   const [flipping, setFlipping] = useState(false);
+  const [voiceState, setVoiceState] = useState<VoiceState>("off");
+  const [voiceTranscript, setVoiceTranscript] = useState<string>("");
+  const [voiceAck, setVoiceAck] = useState<string>("");
+  const [voiceIntent, setVoiceIntent] = useState<EditTypeId | null>(null);
+  const voiceAgentRef = useRef<VoiceAgent | null>(null);
+  const voiceAvailable = isVoiceSupported();
   const [templateDialog, setTemplateDialog] = useState<{
     key: TemplateKey;
     name: string;
@@ -325,7 +334,7 @@ function StagePage() {
   const logPromptEvent = useCallback(
     async (
       kind: "apply" | "undo" | "clear" | "preset" | "reactive",
-      source: "text" | "gesture" | "face" | "preset" | "remote",
+      source: "text" | "gesture" | "face" | "preset" | "remote" | "voice",
       p: PromptState | null,
     ) => {
       const sid = sessionIdRef.current;
@@ -352,7 +361,7 @@ function StagePage() {
   const applyPrompt = useCallback(
     async (
       text: string,
-      source: "text" | "gesture" | "face" | "preset" | "remote",
+      source: "text" | "gesture" | "face" | "preset" | "remote" | "voice",
       ref?: { dataUri: string; path?: string } | null,
     ) => {
       if (!transportRef.current) return;
@@ -1292,6 +1301,128 @@ function StagePage() {
     toast.success("Applied with reference");
   }, [refImage, prompt, applyPrompt]);
 
+  // --- Computah voice control ---
+  const handleVoiceToolCall = useCallback(
+    async (call: VoiceToolCall) => {
+      const agent = voiceAgentRef.current;
+      const t0 = performance.now();
+      if (call.name === "wait_for_user") {
+        agent?.sendToolOutput(call.callId, { status: "ok" }, { respond: false });
+        return;
+      }
+      if (call.name !== "apply_video_edit") {
+        agent?.sendToolOutput(
+          call.callId,
+          { status: "unknown_tool" },
+          { respond: false },
+        );
+        return;
+      }
+      const args = (call.args ?? {}) as {
+        edit_type?: unknown;
+        lucy_prompt?: unknown;
+        use_reference_image?: unknown;
+      };
+      const editType = isEditTypeId(args.edit_type) ? args.edit_type : null;
+      const lucyPrompt =
+        typeof args.lucy_prompt === "string" ? args.lucy_prompt.trim() : "";
+      const useRef = args.use_reference_image === true;
+      if (!editType || !lucyPrompt) {
+        agent?.sendToolOutput(
+          call.callId,
+          { status: "invalid_args" },
+          { respond: false },
+        );
+        return;
+      }
+      setVoiceIntent(editType);
+      setVoiceState("thinking");
+      try {
+        const ref = useRef ? refImage : null;
+        activePresetKindRef.current = "other";
+        await applyPrompt(lucyPrompt, "voice", ref);
+        agent?.sendToolOutput(
+          call.callId,
+          { status: "applied" },
+          { respond: false },
+        );
+        setVoiceState("armed");
+        // Log to voice_events
+        const uid = userIdRef.current;
+        const sid = sessionIdRef.current;
+        if (uid && sid) {
+          void supabase.from("voice_events").insert({
+            session_id: sid,
+            user_id: uid,
+            transcript: voiceTranscript || null,
+            wake_detected: true,
+            edit_type: editType,
+            lucy_prompt: lucyPrompt,
+            ack_word: voiceAck || null,
+            latency_ms: Math.round(performance.now() - t0),
+            at_ms: at_ms(),
+          });
+        }
+      } catch (e) {
+        console.warn("voice apply failed", e);
+        agent?.sendToolOutput(
+          call.callId,
+          { status: "error" },
+          { respond: false },
+        );
+        setVoiceState("armed");
+      }
+    },
+    [applyPrompt, refImage, voiceAck, voiceTranscript],
+  );
+
+  const toggleVoice = useCallback(async () => {
+    if (voiceAgentRef.current) {
+      voiceAgentRef.current.close();
+      voiceAgentRef.current = null;
+      setVoiceState("off");
+      setVoiceTranscript("");
+      setVoiceAck("");
+      setVoiceIntent(null);
+      return;
+    }
+    if (!voiceAvailable) {
+      toast.error("Voice control needs a browser with microphone + WebRTC.");
+      return;
+    }
+    const agent = new VoiceAgent({
+      onState: setVoiceState,
+      onTranscript: (t) => setVoiceTranscript(t),
+      onAck: (w) => setVoiceAck(w),
+      onToolCall: handleVoiceToolCall,
+      onError: (e) => {
+        console.warn("voice agent error", e);
+        toast.error("Computah voice error");
+      },
+      onIdleDisarm: () => {
+        toast("Computah listening off (idle)");
+        voiceAgentRef.current = null;
+      },
+    });
+    voiceAgentRef.current = agent;
+    try {
+      await agent.start();
+      toast('Say "Computah" then your edit');
+    } catch {
+      voiceAgentRef.current = null;
+    }
+  }, [voiceAvailable, handleVoiceToolCall]);
+
+  // Ensure the mic is released on unmount
+  useEffect(() => {
+    return () => {
+      voiceAgentRef.current?.close();
+      voiceAgentRef.current = null;
+    };
+  }, []);
+
+
+
 
   const savePreset = async () => {
     if (!applied?.text) return;
@@ -1437,6 +1568,13 @@ function StagePage() {
     toggleDepth,
     depthStream,
     activeSource,
+    voiceState,
+    voiceTranscript,
+    voiceAck,
+    voiceIntent,
+    voiceIntentLabel: voiceIntent ? editLabel(voiceIntent) : null,
+    voiceAvailable,
+    toggleVoice: () => void toggleVoice(),
   };
 
   return (

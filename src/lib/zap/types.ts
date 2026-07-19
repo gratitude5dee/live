@@ -5,7 +5,9 @@ export type SessionRow = Database["public"]["Tables"]["sessions"]["Row"];
 export type TakeRow = Database["public"]["Tables"]["takes"]["Row"];
 
 export type PromptEventKind = "apply" | "undo" | "clear" | "preset" | "reactive";
-export type PromptEventSource = "text" | "gesture" | "face" | "preset" | "remote";
+export type PromptEventSource = "text" | "gesture" | "face" | "preset" | "remote" | "voice";
+
+export type VoiceState = "off" | "connecting" | "armed" | "thinking" | "error";
 
 export type PromptState = {
   text: string;

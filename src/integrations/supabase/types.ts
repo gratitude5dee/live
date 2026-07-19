@@ -233,6 +233,56 @@ export type Database = {
           },
         ]
       }
+      voice_events: {
+        Row: {
+          ack_word: string | null
+          at_ms: number
+          created_at: string
+          edit_type: string | null
+          id: number
+          latency_ms: number | null
+          lucy_prompt: string | null
+          session_id: string
+          transcript: string | null
+          user_id: string
+          wake_detected: boolean
+        }
+        Insert: {
+          ack_word?: string | null
+          at_ms: number
+          created_at?: string
+          edit_type?: string | null
+          id?: never
+          latency_ms?: number | null
+          lucy_prompt?: string | null
+          session_id: string
+          transcript?: string | null
+          user_id: string
+          wake_detected?: boolean
+        }
+        Update: {
+          ack_word?: string | null
+          at_ms?: number
+          created_at?: string
+          edit_type?: string | null
+          id?: never
+          latency_ms?: number | null
+          lucy_prompt?: string | null
+          session_id?: string
+          transcript?: string | null
+          user_id?: string
+          wake_detected?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "voice_events_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

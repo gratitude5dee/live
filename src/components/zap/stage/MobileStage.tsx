@@ -106,6 +106,30 @@ export default function MobileStage(p: StageViewProps) {
             )}
             <span>{p.facingMode === "user" ? "Front" : "Back"}</span>
           </button>
+          {p.voiceAvailable && (
+            <button
+              onClick={p.toggleVoice}
+              aria-label="Toggle Computah voice"
+              className={`grid h-8 w-8 place-items-center rounded-full border backdrop-blur-xl active:scale-95 ${
+                p.voiceState === "armed"
+                  ? "border-emerald-300/50 bg-emerald-400/20 text-emerald-100"
+                  : p.voiceState === "connecting"
+                    ? "border-amber-300/40 bg-amber-300/20 text-amber-100"
+                    : p.voiceState === "thinking"
+                      ? "border-cyan-300/50 bg-cyan-400/20 text-cyan-100"
+                      : p.voiceState === "error"
+                        ? "border-red-400/50 bg-red-400/20 text-red-100"
+                        : "border-white/10 bg-black/60 text-white/70"
+              }`}
+              title={
+                p.voiceState === "off"
+                  ? 'Turn on Computah voice — say "Computah" then your edit'
+                  : "Turn off Computah"
+              }
+            >
+              🎙
+            </button>
+          )}
           <button
             onClick={() => setShowQr((v) => !v)}
             aria-label="Show remote QR"
@@ -217,6 +241,39 @@ export default function MobileStage(p: StageViewProps) {
           </div>
         </div>
       )}
+
+      {/* Computah HUD */}
+      {p.voiceState !== "off" && (
+        <div
+          className="pointer-events-none fixed inset-x-0 z-10 flex flex-col items-center gap-1 px-4"
+          style={{ bottom: "calc(env(safe-area-inset-bottom) + 13.5rem)" }}
+        >
+          <div className="flex items-center gap-1.5 rounded-full border border-white/10 bg-black/70 px-2.5 py-1 text-[10px] uppercase tracking-widest text-white/80 backdrop-blur-xl">
+            <span
+              className={`inline-block h-1.5 w-1.5 rounded-full ${
+                p.voiceState === "armed"
+                  ? "animate-pulse bg-emerald-300"
+                  : p.voiceState === "thinking"
+                    ? "animate-pulse bg-cyan-300"
+                    : p.voiceState === "connecting"
+                      ? "animate-pulse bg-amber-300"
+                      : "bg-red-400"
+              }`}
+            />
+            <span>Computah · {p.voiceState}</span>
+            {p.voiceAck && <span className="text-emerald-200">"{p.voiceAck}"</span>}
+            {p.voiceIntentLabel && (
+              <span className="text-cyan-200">{p.voiceIntentLabel}</span>
+            )}
+          </div>
+          {p.voiceTranscript && (
+            <div className="max-w-[85%] truncate rounded-full border border-white/10 bg-black/60 px-2.5 py-1 text-[10px] text-white/70 backdrop-blur-xl">
+              "{p.voiceTranscript}"
+            </div>
+          )}
+        </div>
+      )}
+
 
       {/* QR sheet */}
       {showQr && p.qrDataUrl && (
