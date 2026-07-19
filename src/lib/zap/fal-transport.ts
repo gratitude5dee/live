@@ -103,6 +103,12 @@ export class VideoTransport {
         const sender = pc.addTrack(track, this.inputStream);
         if (!this.videoSender) this.videoSender = sender;
       }
+      // Apply any track that was requested before the sender existed.
+      if (this.pendingTrack && this.videoSender) {
+        const pending = this.pendingTrack;
+        this.pendingTrack = null;
+        void this.replaceVideoTrack(pending);
+      }
 
       pc.addTransceiver("video", { direction: "recvonly" });
 
