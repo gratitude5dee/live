@@ -1,57 +1,45 @@
 ## Problem
 
-1. When Depth is toggled on:
-   - The Lucy playback stays stuck on the previous (raw-camera) look because we swap in the depth `MediaStreamTrack` before its canvas has produced its first real frame. Lucy either receives a black/empty stream or hangs on the last raw frame.
-   - The DepthVideo overlay is mounted in the PiP but `srcObject` is attached before the depth canvas has painted anything, and the `<video>` element autoplay can silently stall, so the user still sees the raw camera underneath with landmarks on top.
-2. `/library` is a plain dark grid — it doesn't share any visual language with the landing hero (LiquidEther bg, glass surfaces, ShinyText, WZRD logo/nav).
+1. **Quality regression**: Character-swap presets route through `CompositeStream` (offscreen canvas at 1080×1920, 30fps, `captureStream`) so face landmarks can be baked into the frame. That extra re-encode softens the feed vs. the native `getUserMedia` track — visible in screenshot #1 (`COMPOSITE` badge, muddy skin detail). Gesture-FX ("Fire Hands") is the same path. All other presets already send the raw track and look sharper.
+2. **Ref image UX**: The tiny thumbnail next to the ✨Enhance / 🖼️Ref chips (red circle in screenshot #2) is a static `<img>` — no way to replace or delete without opening the file picker + no visible affordance to remove.
 
-## Fixes
+## Fix
 
-### 1. Depth: wait for first real frame before hot-swap + guarantee playback
+### A. Default character_swap + gesture_fx to the raw camera track
 
-In `src/lib/zap/depth-engine.ts`:
-- Add a `firstFrame: Promise<void>` that resolves the first time `paintDepth` writes real pixels (not the initial black seed).
-- Expose `waitForFirstFrame()` returning that promise.
+- In `src/routes/index.tsx`, add a `bakeLandmarksRef` (default `false`) that gates whether Character Swap / Gesture FX use the compositor. When off, `syncOutboundSource` sends `inputStreamRef.current` (raw 1080p track) for *all* preset kinds — matching the "clean camera" path. When on, it uses the compositor as today.
+- Expose a small "Landmarks" pill toggle in the camera PiP header (next to `DEPTH`) in both `DesktopStage.tsx` and `MobileStage.tsx`. Hidden unless the active preset kind is `character_swap` or `gesture_fx`. Persist choice in `sessionStorage`.
+- Update the `activeSource` badge accordingly (`RAW` becomes the default label after this change).
+- Keep the compositor code path intact; just don't spin it up unless the user opts in.
 
-In `src/routes/index.tsx` `toggleDepth`:
-- After `engine.attach(src)`, `await engine.waitForFirstFrame()` (with a 4s timeout fallback) before setting `depthOnRef=true`, `setDepthStream(engine.stream)`, and calling `syncOutboundSource()`.
-- Keep `depthLoading` true across the whole wait so the UI shows a spinner/progress.
-- On failure or timeout, tear the engine down and surface a toast; do not swap the outbound track.
+Rationale: Lucy re-identifies from the reference image; baked face wireframes are a nice-to-have, not required, and their cost is a global quality hit users notice more than the identity boost.
 
-### 2. Depth PiP visibility
+### B. Make the ref-image chip directly editable
 
-In `DesktopStage.tsx` and `MobileStage.tsx` `DepthVideo`:
-- Keep the depth `<video>` overlay, but stack it above the raw camera (`z-10`) and give the raw camera `-z-0`, so when depth is on the user only sees the depth map.
-- Hide the raw camera element (`hidden` via conditional class) when `p.depthOn && p.depthStream` — this also stops the mirror-drawn raw frames from bleeding through.
-- Add `onLoadedMetadata` handler that explicitly `.play()`s the depth video (some browsers stall until a user gesture even for muted).
-- Move the landmark overlay `<canvas>` to only render when the active preset kind actually uses landmarks (character_swap / gesture_fx), so the depth map isn't covered by face wires.
+In `DesktopStage.tsx` (and mirror in `MobileStage.tsx` composer), replace the static thumbnail with a compact control group:
 
-### 3. /library redesign
+```
+[🖼️ Ref]  →  when refImage present:
+   ┌────────────┐
+   │  thumb  ×  │   ← click thumb = re-open file picker (replace)
+   └────────────┘        × button = clear ref
+```
 
-Rewrite `src/routes/library.tsx` to mirror the landing hero surface:
-- LiquidEther background (same colors as hero) behind a translucent content layer.
-- Top bar identical to hero: WZRD logo left, BubbleMenu-style nav on the right (or a simpler glass pill nav with "Stage", "Presets", "wzrd.tech").
-- `ShinyText` for the page title "Library" and empty-state copy.
-- Content grid wrapped in `GlassSurface` cards, one per take:
-  - Video/image preview at top with rounded corners, poster fallback, controls.
-  - Meta row: kind chip, timestamp, session id short hash, prompt (if we have it via `takes.metadata`) truncated.
-  - Actions row: Download (creates an `<a download>` from the signed URL) and Delete with a confirm.
-- Fetch every take the current authenticated user can read (existing RLS-scoped query) and generate signed URLs; also fetch `takes.kind = 'video'` first, then images. Add a simple filter pill row: All / Videos / Snapshots.
-- Empty state uses the same GlassSurface + ShinyText, with a CTA "← Back to Stage".
-- Site footer (`SiteFooter`) reused at the bottom for brand parity.
+- Wrap the thumbnail in a `<label htmlFor="ref-file">` so clicking it re-opens the same hidden `<input type="file">` (replace).
+- Add an `×` button overlaid top-right of the thumb that calls a new `clearRefImage` prop.
+- Add a `clearRefImage` handler in `src/routes/index.tsx` that sets `refImage` to `null` and re-applies the current prompt without a ref (so Lucy immediately drops the reference).
+- Extend `StageViewProps` in `src/components/zap/stage/types.ts` with `clearRefImage: () => void` and the new landmarks toggle props (`bakeLandmarks`, `toggleBakeLandmarks`, `landmarksAvailable`).
+- Hide the 🖼️Ref upload chip once a ref is present (the thumbnail becomes the interactive control) to declutter.
 
-No schema or storage changes.
+### C. Mirror on mobile
 
-## Technical notes
-
-- `depth-engine.ts` only needs one small addition; keeping the seeded-black start avoids a WebRTC "no-source" error, but the `firstFrame` promise is what gates the outbound swap so Lucy sees a real depth image on the very first delivered frame.
-- The `<video>` element for the depth stream must be `muted playsInline autoPlay` (already) and we call `.play()` in `onLoadedMetadata` to defeat Safari's occasional stall.
-- Library redesign is purely presentational; no server-function or DB migration work.
+Apply the same landmarks toggle + ref chip changes in `MobileStage.tsx` so both surfaces behave identically.
 
 ## Files touched
 
-- `src/lib/zap/depth-engine.ts` — add `firstFrame` promise + `waitForFirstFrame()`.
-- `src/routes/index.tsx` — `toggleDepth` awaits first frame; only then swap track and flip UI state.
-- `src/components/zap/stage/DesktopStage.tsx` — z-stacking, hide raw when depth on, gated landmark canvas.
-- `src/components/zap/stage/MobileStage.tsx` — same as above.
-- `src/routes/library.tsx` — full redesign matching hero aesthetic.
+- `src/routes/index.tsx` — add `bakeLandmarksRef` + toggle, update `syncOutboundSource`, add `clearRefImage`, wire new props through to stage views.
+- `src/components/zap/stage/types.ts` — new props.
+- `src/components/zap/stage/DesktopStage.tsx` — PiP landmarks toggle, replace ref thumbnail with replace/remove control.
+- `src/components/zap/stage/MobileStage.tsx` — same two changes.
+
+No schema, transport, or fal-token changes.
