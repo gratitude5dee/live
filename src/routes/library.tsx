@@ -340,12 +340,18 @@ function LibraryPage() {
 function FloatingNav() {
   return (
     <header className="sticky top-4 z-40 mx-auto mt-4 flex w-fit max-w-[calc(100vw-32px)] items-center gap-1 rounded-full border border-white/10 bg-black/50 p-1 pl-2 backdrop-blur-2xl shadow-[0_20px_60px_-30px_rgba(0,0,0,0.8)]">
-      <Link to="/" className="group flex items-center gap-2 rounded-full py-1 pl-1.5 pr-3">
+      <a
+        href="https://wzrd.tech"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group flex items-center gap-2 rounded-full py-1 pl-1.5 pr-3"
+        aria-label="WZRD.tech"
+      >
         <span className="grid h-7 w-7 place-items-center rounded-full bg-white/5 ring-1 ring-white/10">
-          <img src={wzrdLogo.url} alt="WZRD" className="h-4 w-4 opacity-90" />
+          <img src={wzrdLogo.url} alt="WZRD" className="h-4 w-4 opacity-90 transition group-hover:opacity-100" />
         </span>
-        <span className={`${MONO} text-[10px] uppercase tracking-[0.28em] text-white/60`}>wzrd.tech</span>
-      </Link>
+        <span className={`${MONO} text-[10px] uppercase tracking-[0.28em] text-white/60 transition group-hover:text-white/80`}>wzrd.tech</span>
+      </a>
       <span className="h-4 w-px bg-white/10" />
       <span className={`${MONO} px-3 text-[10px] uppercase tracking-[0.28em] text-white/90`}>Archive</span>
       <Link
