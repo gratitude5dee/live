@@ -1258,6 +1258,22 @@ function StagePage() {
     toast.success("Reference set");
   };
 
+  const clearRefImage = useCallback(() => {
+    setRefImage(null);
+    // If a prompt is currently applied with a ref, re-apply it without one
+    // so Lucy immediately drops the reference from the live feed.
+    if (appliedRef.current?.refImage && transportRef.current) {
+      transportRef.current.send({
+        prompt: appliedRef.current.text,
+        enable_prompt_expansion: enhance,
+      });
+      const next: PromptState = { text: appliedRef.current.text };
+      setApplied(next);
+    }
+    toast("Reference cleared");
+  }, [enhance]);
+
+
   const savePreset = async () => {
     if (!applied?.text) return;
     const name = window.prompt("Preset name?");
