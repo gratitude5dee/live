@@ -23,7 +23,10 @@ import {
   type Preset,
   type PromptState,
   type RemoteMessage,
+  type VoiceState,
 } from "@/lib/zap/types";
+import { VoiceAgent, isVoiceSupported, type VoiceToolCall } from "@/lib/zap/voice-agent";
+import { isEditTypeId, editLabel, type EditTypeId } from "@/lib/zap/voice-intent";
 import type {
   FaceLandmarker,
   GestureRecognizer,
