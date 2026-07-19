@@ -1,102 +1,60 @@
-## Part 1 — Fix wake-word recognition
+# /library — TikTok Feed + Selectable List
 
-**Current state.** `WAKE_WORD_RE = /comput(ah|er|a)/i` and the system prompt in `COMPUTAH_INSTRUCTIONS` lists only `Computah / computer / computa / komputa`. Whisper's transcriber (`gpt-4o-mini-transcribe`) frequently emits close-but-not-listed variants (`compooter`, `kompyoota`, `computah!`, `kumpyootah`, `come pooter`, `come put a`, `commuter`), and because we set `tool_choice: "required"` the model will still route those — but only if the *instructions* let it. Right now the instructions tell it to treat non-listed variants as "not addressed to you" and call `wait_for_user`, so real commands get silently dropped.
+Rebuild `/library` with two toggleable view modes and multi-select for bulk download / delete. Keeps the existing LiquidEther + ShinyText + GlassSurface aesthetic.
 
-There is also no client-side safety net: if the model mis-routes to `wait_for_user`, nothing recovers the command.
+## View modes (top-right toggle next to filter pills)
 
-**Changes — all in `src/lib/zap/voice-intent.ts` (data-only, no logic churn):**
+1. **Feed** — TikTok-style. Full-viewport 9:16 vertical scroll-snap deck of takes.
+2. **Grid** — current card grid (default on desktop, retained).
+3. **List** — dense table-like rows with checkboxes, thumbnail, filename, date, size, duration, and per-row download.
 
-1. Broaden `WAKE_WORD_RE` to a phonetic set that covers what Whisper actually emits:
+Persist choice in `localStorage("zap.library.view")`. Default: `feed` on mobile, `grid` on desktop.
 
-   ```ts
-   export const WAKE_WORD_RE =
-     /\b(k|c)[o0]m(p|b)[uy]?(t|d)(ah|er|a|uh|ur|or|a[hr]?)\b|\bcommut(er|ah|a)\b|\bcome\s*p(oo|u)t(er|ah|a)\b/i;
-   ```
+## Feed mode
 
-   Covers: computah, computer, computa, kompyoota, kompyootah, compoota, compooder, kumputer, commuter, "come pooter", "come put a", etc.
+- Vertical `snap-y snap-mandatory` scroll container, one take per screen.
+- Video autoplays (muted, loop, playsInline) when its slide is >60% visible via `IntersectionObserver`; pauses on exit. Only one active at a time.
+- Tap to toggle mute; long-press / double-tap to like (local only for now).
+- Right rail overlay (floating, glass): download, delete, select-checkmark, share (copies signed URL), timestamp.
+- Snapshots (`kind === 'image'`) get the Ken-Burns slow zoom treatment so they feel alive in-feed.
+- Keyboard: `↑/↓` = prev/next, `m` = mute, `d` = download, `x` = delete, `space` = play/pause.
 
-2. Rewrite the "Wake word" section of `COMPUTAH_INSTRUCTIONS` so the model is permissive by design:
+## List mode
 
-   > The wake word is **any word that sounds like "computah"** — accept computah, computer, computa, computuh, kompyoota, kompyootah, compoota, compooter, commuter, kumputer, "come pooter", "come put a", and any similar phonetic spelling the transcriber produces. Treat all of these as the wake word. If a leading token is a near-homophone of "computah" and the rest of the utterance is an actionable video edit, call `apply_video_edit`. Only fall through to `wait_for_user` when the leading token is clearly unrelated (e.g. "hey", "what", music, silence).
+- Rows with a leading checkbox, 48×80 thumbnail (video poster frame captured client-side via `<video>` seek to 0.1s onto a canvas), filename, `kind` chip, created date, duration (formatted from `duration_ms`), size (from `size_bytes`), and per-row download button.
+- Header row has a master checkbox (select all / none in current filter).
+- Sort by date desc; click column header (Date / Size / Duration) to toggle sort.
 
-3. Export a helper `matchesWake(transcript: string): boolean` using the new regex, for the client-side safety net below.
+## Multi-select + bulk actions (all modes)
 
-**Client-side safety net — `src/lib/zap/voice-agent.ts`:**
+- Selection state lives in a `Set<number>` of take ids, shared across views.
+- Floating action bar (bottom center, glass) appears when `selected.size > 0`:
+  - `N selected`
+  - **Download all** → sequentially triggers signed-URL downloads (anchor click loop with 150ms spacing to avoid browser throttling). For >3 items, offer **Download as ZIP** using `client-zip` (streams, tiny, no deps beyond ~3KB). Adds `bun add client-zip`.
+  - **Delete** → confirm, then `Promise.all` remove from storage + rows.
+  - **Clear**.
+- Checkmark UI: grid cards get a top-right circular checkbox that fills cyan when selected + adds a `ring-2 ring-cyan-300` frame. Feed slides get a floating check on the right rail. List rows use the leading checkbox.
 
-In `handleEvent`, when a `conversation.item.input_audio_transcription.completed` event arrives, buffer the last transcript on the instance. When the *next* `response.done` fires with no `function_call` items dispatched for that response, check `matchesWake(lastTranscript)`. If true, surface `onToolCall({ callId: synthetic, name: "wake_word_missed", args: { transcript } })` so `routes/index.tsx` can either (a) forward the raw command back into `applyPrompt(transcript, "voice")` via a lightweight local classifier, or (b) at minimum toast "Heard you — say it again" so the user knows the wake word landed but the edit didn't. Keep this minimal — the primary fix is the prompt/regex work; this is a belt-and-braces log/toast.
+## Data / fetch tweaks
 
-Verification: preview → mic on → say each of "Computer, put me on Mars", "Kompyootah, add a fedora", "Commuter, remove the background". All three must route into Lucy.
+- Keep the existing single-shot fetch, but chunk signed-URL creation into `Promise.all` batches of 20 (already fast enough for 120).
+- Add `kind` filter counts already present; add a `duration_ms`/`size_bytes` formatter util in-file.
+- No schema changes. No new server functions.
 
----
+## Files touched
 
-## Part 2 — Latency audit + optimizations
+- `src/routes/library.tsx` — rewrite in place. Split into small internal components: `ViewToggle`, `FeedView`, `GridView` (extracted from current), `ListView`, `BulkBar`, `SelectCheck`.
+- `package.json` — add `client-zip` (only if ZIP download is kept; ~3KB, MIT).
 
-I traced the full mic-to-Lucy-repaint path. Numbers below are typical, measured/estimated:
+## Out of scope
 
-```text
-[mic] → OpenAI Realtime (STT + classify + tool call)      ~700–1400 ms   ← dominant
-      → WebRTC data channel → handleEvent → applyPrompt      <5 ms
-      → fal-transport.send() over WS → Lucy inference      ~600–1000 ms   ← dominant
-      → new frames on <video>                              ~30–80 ms
-──────────────────────────────────────────────────────────
-Total wake-word → visible repaint                          ~1.3 – 2.5 s
-```
+- No backend pagination (120-row limit stays).
+- No renaming / tagging (nice-to-have, ask later).
+- No per-user "likes" persistence.
 
-Everything else in the app (MediaPipe, compositor, depth, recorder, Supabase logging) is off the critical path for a voice edit. The two dominant costs are the OpenAI turn and the Lucy turn.
+## Technical notes
 
-### High-impact wins (do first)
-
-1. **Fire Lucy before the tool call finishes streaming.**
-   Right now we only dispatch on `response.function_call_arguments.done` / `output_item.done`. OpenAI streams `response.function_call_arguments.delta` events with partial JSON — once `lucy_prompt` is a complete quoted string (JSON-parseable prefix), we can call `applyPrompt` ~200–400 ms earlier. Requires a tiny streaming JSON reader in `voice-agent.ts` that watches for the closing quote after `"lucy_prompt":"..."`. Guard against double-fire with the existing `dispatchedCallIds` set. Expected saving: **200–400 ms** per command.
-
-2. **Disable audio-out entirely at the transport layer.**
-   `output_modalities: ["text"]` already silences TTS, but the session config still requests `audio` output implicitly and OpenAI still allocates the audio decoder pipeline. Drop the remote `<audio>` element and remove `pc.ontrack` — every ms we're not waiting on audio ICE is a ms sooner the DC opens. Also switch `turn_detection` from `"semantic_vad"` to `"server_vad"` with `silence_duration_ms: 300`. Semantic VAD adds ~200–500 ms of "is the user done thinking" delay; server VAD ends the turn as soon as the user stops speaking. Expected saving: **200–500 ms**.
-
-3. **Warm the OpenAI session before the user speaks.**
-   Today `VoiceAgent.start()` runs on mic-button click: token mint (~150 ms) + `getUserMedia` (~200 ms) + SDP round-trip (~300–600 ms) = ~1 s of dead air before the first command works. Warm on hover of the mic button (desktop) or on page focus after `authReady` (mobile) — mint the ephemeral secret and open the PC, but do not enable the mic track until click. Expected saving: **500–1000 ms** on first command.
-
-4. **Ship Lucy the prompt without waiting for React state.**
-   `applyPrompt` currently `setPrevApplied`/`setApplied` before `transport.send()`. Flip the order: call `transport.send()` first (it's synchronous WS send), then update state. Saves one React commit (~16 ms) on the critical path. Also drop the `await logPromptEvent(...)` from the critical path — fire-and-forget it. Expected saving: **20–100 ms**.
-
-### Medium-impact
-
-5. **Prompt-expansion off for voice.**
-   `enhance` (Lucy's `enable_prompt_expansion`) adds ~200–400 ms server-side. The voice agent already produces a Lucy-optimized prompt from the template. In `applyPrompt`, when `source === "voice"`, send `enable_prompt_expansion: false`. Expected saving: **200–400 ms** for voice commands.
-
-6. **Reference-image path: pre-upload, don't inline.**
-   When `use_reference_image=true`, we currently pass a base64 data URI to Lucy. For a 1 MB image over WS, that's ~150–400 ms of upload. Pre-upload the current `refImage` to Supabase Storage on selection and pass the public URL to Lucy (Lucy accepts URLs). Expected saving: **150–400 ms** on ref-image commands.
-
-7. **Kill the MediaPipe re-init warnings and drop landmarker FPS when idle.**
-   Console shows repeated `Graph finished closing successfully` + `Successfully destroyed WebGL context` — MediaPipe is being torn down and re-created on some re-renders. Confirm with a `console.count` in `loadGestureRecognizer`. If it re-inits per remount, move loader promises to a module-scoped singleton. Not on the voice critical path, but frees ~20–40% GPU headroom for Lucy's WebRTC decode.
-
-### Low-impact / hygiene
-
-8. Coalesce `logPromptEvent` inserts into `visionBuffer`'s existing batch writer instead of a per-event Supabase INSERT round-trip.
-9. `defaultPreloadStaleTime: 0` isn't the issue but confirm the `presets` query is cached — a stale-refetch on route focus can cost 50–100 ms.
-10. Drop the `THREE.Clock deprecated` warning in `LiquidEther` (cosmetic — swap for `THREE.Timer`).
-
-### Projected end-to-end after wins 1–5
-
-```text
-wake word → visible repaint    ~700 – 1300 ms    (down from ~1.3 – 2.5 s)
-```
-
-The rest is inside Lucy's inference and OpenAI's turn — hard floor without changing providers.
-
----
-
-## Files touched by this plan
-
-- `src/lib/zap/voice-intent.ts` — broaden regex, rewrite wake section, export `matchesWake`.
-- `src/lib/zap/voice-agent.ts` — streaming-args early dispatch, drop remote audio track, server_vad, prewarm hook, wake-miss surfacing.
-- `src/routes/index.tsx` — `applyPrompt` reorder + fire-and-forget log, `enable_prompt_expansion: false` for voice, ref-image pre-upload path, prewarm on mic-button hover.
-- `src/lib/zap/mediapipe.ts` — module-scoped singleton for loaders (only if re-init is confirmed).
-
-No schema changes. No new dependencies.
-
-## Verification
-
-1. Typecheck.
-2. Wake-word matrix: say each of computah / computer / computa / kompyoota / commuter / "come pooter" + a command; each must route.
-3. Instrument `voice-agent.ts` with `performance.now()` at (a) mic-button click, (b) DC open, (c) first `response.function_call_arguments.delta`, (d) `apply_video_edit` dispatched, (e) `transport.send()` returned. Post to console, confirm ~700–1300 ms budget in preview.
-4. Ref-image command with pre-uploaded URL — confirm Lucy accepts it and repaint is visibly faster than base64 path.
+- `IntersectionObserver` with `threshold: [0, 0.6, 1]` on each feed slide; a single `ref` map keyed by take id drives play/pause.
+- Poster generation: create hidden `<video crossOrigin="anonymous" preload="metadata">`, on `loadeddata` seek to `0.1`, draw to `<canvas>` at 96×160, `toDataURL('image/jpeg', 0.6)`, cache in a `Map` keyed by take id.
+- ZIP: `import { downloadZip } from 'client-zip'`; feed it `[{ name, input: await fetch(url) }, ...]`, then `URL.createObjectURL(await zip.blob())`.
+- Preserve `LiquidEther` background — reduce opacity behind Feed mode to 30% so video content dominates.
