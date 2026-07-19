@@ -853,19 +853,9 @@ function StagePage() {
 
       {/* Stage */}
       <main className="relative mx-auto max-w-6xl p-4">
-        {connState === "idle" && (
-          <div className="-mx-4 -mt-4">
-            <LandingHero
-              onEnter={() => {
-                if (authReady) startSession();
-              }}
-              disabled={!authReady}
-            />
-          </div>
-        )}
-
-        {connState !== "idle" && (
+        {(
           <div className="relative aspect-video overflow-hidden rounded-2xl border border-[#2A2A35] bg-black">
+
             <video
               ref={outputVideoRef}
               className="h-full w-full object-cover"
@@ -925,7 +915,9 @@ function StagePage() {
         )}
 
         {/* Preset rail */}
-        {connState !== "idle" && (
+        {/* Preset rail */}
+        {(
+
           <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
             {presets.map((p, i) => (
               <button
