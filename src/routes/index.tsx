@@ -71,6 +71,8 @@ function StagePage() {
   const [facePresent, setFacePresent] = useState(true);
   const [perfMode, setPerfMode] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(0);
+  const [inputStream, setInputStream] = useState<MediaStream | null>(null);
+  const [outputStream, setOutputStream] = useState<MediaStream | null>(null);
 
   const inputVideoRef = useRef<HTMLVideoElement>(null);
   const outputVideoRef = useRef<HTMLVideoElement>(null);
@@ -337,10 +339,7 @@ function StagePage() {
         audio: false,
       });
       inputStreamRef.current = stream;
-      if (inputVideoRef.current) {
-        inputVideoRef.current.srcObject = stream;
-        inputVideoRef.current.play().catch(() => {});
-      }
+      setInputStream(stream);
       setConnState("camera_ready");
 
       // Create session row
@@ -419,10 +418,7 @@ function StagePage() {
       const t = new VideoTransport(stream, {
         onOutputStream: (out) => {
           outputStreamRef.current = out;
-          if (outputVideoRef.current) {
-            outputVideoRef.current.srcObject = out;
-            outputVideoRef.current.play().catch(() => {});
-          }
+          setOutputStream(out);
           setConnState("live");
         },
         onTransportChosen: (mode) => {
@@ -624,6 +620,24 @@ function StagePage() {
   useEffect(() => {
     appliedRef.current = applied;
   }, [applied]);
+
+  // Attach input MediaStream once the PiP <video> is mounted.
+  useEffect(() => {
+    const v = inputVideoRef.current;
+    if (v && inputStream && v.srcObject !== inputStream) {
+      v.srcObject = inputStream;
+      v.play().catch(() => {});
+    }
+  }, [inputStream]);
+
+  // Attach fal output MediaStream once the main <video> is mounted.
+  useEffect(() => {
+    const v = outputVideoRef.current;
+    if (v && outputStream && v.srcObject !== outputStream) {
+      v.srcObject = outputStream;
+      v.play().catch(() => {});
+    }
+  }, [outputStream]);
 
   // --- Cleanup, tab-hidden pause, un-uploaded warning ---
   useEffect(() => {
@@ -861,6 +875,7 @@ function StagePage() {
             <video
               ref={outputVideoRef}
               className="h-full w-full object-cover"
+              autoPlay
               playsInline
               muted
             />
@@ -881,6 +896,7 @@ function StagePage() {
               <video
                 ref={inputVideoRef}
                 className="h-full w-full -scale-x-100 object-cover"
+                autoPlay
                 playsInline
                 muted
               />

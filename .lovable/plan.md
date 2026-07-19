@@ -1,51 +1,54 @@
+## Root cause
 
-# Frontend polish — React Bits integration
+When the user clicks **Zap Live**, `startSession()` runs:
 
-Elevate the landing surface at `/` with four React Bits components. The current stage UI (camera, transport, gestures) stays intact; we're wrapping it behind a cinematic entry screen and upgrading its chrome.
+1. `setConnState("requesting_camera")` — schedules a re-render (still on the LandingHero screen, so no `<video>` elements are mounted yet).
+2. `await navigator.mediaDevices.getUserMedia(...)` — resolves quickly; React hasn't necessarily flushed yet.
+3. `if (inputVideoRef.current) inputVideoRef.current.srcObject = stream;` — the ref is still `null`, so **the assignment is silently skipped**.
+4. Session, transport, and fal all continue and eventually reach `live` — matching the "live · frame" chip in the screenshot — but the PiP video element mounts later with no `srcObject` and stays black.
 
-## What the user sees
+The same race can affect `outputVideoRef` (frame-mode's canvas captureStream is delivered via `onOutputStream` after the connection settles, so it usually wins, but it's the same anti-pattern).
 
-1. Land on `/` → full-viewport **Iridescence** shader background, animated **Strands** ribbon centerpiece, hero copy "ZAP-LIVE — your webcam is the timeline", and a single **GlassSurface** button labeled **"Zap Live"**.
-2. Click **Zap Live** → the hero fades out and the existing stage card ("your webcam is the timeline" / camera + prompt dock) mounts and starts the session.
-3. Every primary CTA inside the stage (Apply, Record, Snapshot) uses **SpecularButton** for a consistent specular-edge language.
+The MediaPipe "memory access out of bounds" warnings are unrelated noise from running inference against a video that has no frames — they'll stop once the stream is actually attached.
 
-## Files to add
+## Fix
 
-```
-src/components/reactbits/
-  GlassSurface.tsx          + GlassSurface.css
-  Strands.tsx               + Strands.css
-  Iridescence.tsx           + Iridescence.css
-  SpecularButton.tsx        + SpecularButton.css
-src/components/zap/
-  LandingHero.tsx           # Iridescence + Strands + hero copy + Zap Live CTA
-```
+Stop assigning `srcObject` imperatively inside `startSession`. Store the input stream in state and attach it from a `useEffect` keyed on the stream + the ref. Do the same for the output stream so both videos are declarative.
 
-## Files to modify
+### Changes to `src/routes/index.tsx`
 
-- `src/routes/index.tsx` — add `entered` state; when false render `<LandingHero onEnter={() => setEntered(true)} />`; when true render existing stage (unchanged logic). Move `startSession()` to fire on enter instead of mount so camera prompts only appear after user gesture (also fixes autoplay UX).
-- Replace primary action buttons in the stage dock (Apply, Record, Snapshot, Undo) with `SpecularButton` wrappers, keeping current handlers/labels/shortcuts. Secondary chips and preset rail stay as-is.
-- `package.json` — add `ogl` dependency (used by Strands, Iridescence, SpecularButton).
+1. Add two state values alongside the existing refs:
+   - `const [inputStream, setInputStream] = useState<MediaStream | null>(null);`
+   - `const [outputStream, setOutputStream] = useState<MediaStream | null>(null);`
+2. In `startSession`, after `getUserMedia`, call `setInputStream(stream)` (keep `inputStreamRef.current = stream` for the transport/recorder paths that read it synchronously). Remove the `inputVideoRef.current.srcObject = ...` + `.play()` block.
+3. In the transport `onOutputStream` callback, call `setOutputStream(out)` (keep `outputStreamRef.current = out`). Remove the imperative `outputVideoRef.current.srcObject = ...` block.
+4. Add one `useEffect` that attaches whichever stream is present:
+   ```ts
+   useEffect(() => {
+     const v = inputVideoRef.current;
+     if (v && inputStream && v.srcObject !== inputStream) {
+       v.srcObject = inputStream;
+       v.play().catch(() => {});
+     }
+   }, [inputStream]);
+   useEffect(() => {
+     const v = outputVideoRef.current;
+     if (v && outputStream && v.srcObject !== outputStream) {
+       v.srcObject = outputStream;
+       v.play().catch(() => {});
+     }
+   }, [outputStream]);
+   ```
+5. Add `autoPlay` to both `<video>` elements as a defensive measure so a rejected `.play()` promise (autoplay policy edge cases) still resolves on the next user gesture.
 
-## Technical notes
+### Notes
 
-- All four components are JS + WebGL/SVG. Convert to `.tsx` with minimal typing (`children?: React.ReactNode`, prop types from the docs). No behavior changes to the source shaders.
-- `ogl` is browser-only. LandingHero and SpecularButton must not run in SSR: gate the WebGL mounts with a `useHydrated()` check or `typeof window` inside `useEffect` (already the case — they instantiate `Renderer` inside `useEffect`, so safe).
-- `GlassSurface` uses SVG `<feDisplacementMap>` + `backdrop-filter: url(#...)`. Chrome supports it; Safari/Firefox fall back to the CSS `--fallback` class (already handled by the component). No extra work.
-- The provided CSS uses `-webkit-backdrop-filter` alongside `backdrop-filter` — per project rule (tailwind4-backdrop-filter), strip the `-webkit-` duplicates from the copied CSS to avoid Lightning CSS dropping the standard property in production.
-- Iridescence background is fixed `inset-0 -z-10 pointer-events-none` behind the hero only (unmounts when `entered === true` to free GPU).
-- Strands rendered at ~600×400 centered above the headline, `glass={false}`, default palette tuned toward the app's electric/live feel: `["#22d3ee","#a855f7","#f43f5e","#eab308"]`.
-- GlassSurface "Zap Live" button: `width={220} height={64} borderRadius={32}`, inner content is a `<button>` with text + a nested arrow-in-circle (per project's Button-in-Button design rule). Click handler calls `onEnter`.
-- SpecularButton default `size="md"`, `followMouse`, `autoAnimate={false}` — shine only reacts on cursor proximity so it doesn't distract from live video.
+- No changes to `VideoTransport`, session/DB, MediaPipe, or the landing flow.
+- Inference loop already guards on `inputVideoRef.current.readyState >= 2`, so it just starts producing real results once the stream is attached.
+- The MediaPipe wasm warnings should disappear once frames exist; if any persist they're benign and unrelated to this bug.
 
-## Risks / non-goals
+### Validation
 
-- Do NOT touch fal-transport, gesture-engine, face-engine, vision-buffer, Supabase wiring, or route data flow.
-- Do NOT restyle the `/library` or `/remote/$sessionId` routes in this pass (can follow up).
-- WebGL contexts: three canvases (Iridescence, Strands, one SpecularButton per CTA). Landing unmounts Iridescence+Strands on enter, and SpecularButtons live only inside the stage — total ≤ 5 GL contexts, safely under the browser limit.
-
-## Verification
-
-- `bun add ogl`, typecheck passes, build passes.
-- Preview: landing renders shader + strands + glass CTA; click enters stage; camera prompt appears after click; SpecularButtons render with rim highlight on hover.
-- Test in Chrome (SVG glass path) and Safari (fallback path) — both look premium.
+- Click **Zap Live** → PiP shows the webcam within ~1s and the main stage shows Lucy output once `live`.
+- Header chip still reads `live · webrtc` or `live · frame`.
+- No regression to Record, presets, Apply, Undo, Clear, or remote broadcast.
