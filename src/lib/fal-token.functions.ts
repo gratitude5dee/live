@@ -42,7 +42,7 @@ export const mintFalRealtimeToken = createServerFn({ method: "POST" })
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        allowed_apps: [app],
+        app,
         duration: 120,
       }),
     });
