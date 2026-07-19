@@ -118,7 +118,7 @@ export default function SiteFooter() {
             </a>
             <p className="mt-5 max-w-sm text-sm leading-relaxed text-white/70">
               <ShinyText
-                text={"Bend your reality.\nRealtime video, repainted every frame by Lucy 2.5."}
+                text={"Bend your reality. Realtime video, repainted every frame by Zaps! live by WZRD Tech, Inc."}
                 color="#8a8f98"
                 shineColor="#ffffff"
                 speed={7}
