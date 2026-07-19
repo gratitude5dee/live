@@ -47,30 +47,42 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
     },
   ];
 
+  // Detect touch devices to disable the heavy ghost cursor trail on mobile
+  const [isTouch, setIsTouch] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(hover: none), (pointer: coarse)");
+    const update = () => setIsTouch(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
+
   return (
     <div className="relative w-full bg-[#050505] text-[#FAFAFA]">
-      {/* Ghost cursor trail — full-viewport overlay */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0"
-        style={{ zIndex: 40 }}
-      >
-        <GhostCursor
-          color="#B497CF"
-          brightness={1}
-          edgeIntensity={0}
-          trailLength={50}
-          inertia={0.5}
-          grainIntensity={0.05}
-          bloomStrength={0.1}
-          bloomRadius={1.0}
-          bloomThreshold={0.025}
-          fadeDelayMs={1000}
-          fadeDurationMs={1500}
-          mixBlendMode="screen"
-          zIndex={40}
-        />
-      </div>
+      {/* Ghost cursor trail — desktop only */}
+      {!isTouch && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0"
+          style={{ zIndex: 40 }}
+        >
+          <GhostCursor
+            color="#B497CF"
+            brightness={1}
+            edgeIntensity={0}
+            trailLength={50}
+            inertia={0.5}
+            grainIntensity={0.05}
+            bloomStrength={0.1}
+            bloomRadius={1.0}
+            bloomThreshold={0.025}
+            fadeDelayMs={1000}
+            fadeDurationMs={1500}
+            mixBlendMode="screen"
+            zIndex={40}
+          />
+        </div>
+      )}
       {/* Bubble menu — pinned top */}
       <BubbleMenu
         useFixedPosition
