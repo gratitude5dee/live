@@ -339,8 +339,95 @@ function StagePage() {
     [prompt, applyPrompt, undo, clearPrompt, presets, refImage, applyPreset],
   );
 
+  // --- Teardown current session (manual disconnect or auto-timeout) ---
+  const stopSession = useCallback(async (reason?: "manual" | "timeout") => {
+    if (autoStopTimerRef.current) {
+      clearTimeout(autoStopTimerRef.current);
+      autoStopTimerRef.current = null;
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    autoStopScheduledRef.current = false;
+    setRemainingMs(null);
+
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
+    if (revertTimerRef.current) {
+      clearTimeout(revertTimerRef.current);
+      revertTimerRef.current = null;
+    }
+    if (inferenceFrameRef.current !== null) {
+      cancelAnimationFrame(inferenceFrameRef.current);
+      inferenceFrameRef.current = null;
+    }
+    if (recorderRef.current?.state === "recording") {
+      try {
+        recorderRef.current.stop();
+      } catch {
+        // ignore
+      }
+    }
+    try {
+      transportRef.current?.close();
+    } catch {
+      // ignore
+    }
+    transportRef.current = null;
+    try {
+      gestureRef.current?.close();
+    } catch {
+      // ignore
+    }
+    gestureRef.current = null;
+    try {
+      faceRef.current?.close();
+    } catch {
+      // ignore
+    }
+    faceRef.current = null;
+    visionBufRef.current?.stop();
+    visionBufRef.current = null;
+    inputStreamRef.current?.getTracks().forEach((t) => t.stop());
+    inputStreamRef.current = null;
+    outputStreamRef.current = null;
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    const sid = sessionIdRef.current;
+    if (sid) {
+      await supabase
+        .from("sessions")
+        .update({
+          ended_at: new Date().toISOString(),
+          stats: {
+            transport: transportStateRef.current,
+            perf_mode: perfModeRef.current,
+            ended_reason: reason ?? "manual",
+          },
+        })
+        .eq("id", sid);
+    }
+    sessionIdRef.current = null;
+    setSessionId(null);
+    setTransport(null);
+    transportStateRef.current = null;
+    setApplied(null);
+    setPrevApplied(null);
+    setLiveGesture({ label: null, score: 0, hold: 0 });
+    setConnState("idle");
+    if (reason === "timeout") {
+      toast("Session ended after 90s");
+    }
+  }, []);
+
   // --- Start camera + session + fal + realtime channel ---
   const startSession = useCallback(async () => {
+
     setConnState("requesting_camera");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
