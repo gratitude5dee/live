@@ -967,6 +967,7 @@ function StagePage() {
       gestureRef.current?.close();
       faceRef.current?.close();
       visionBufRef.current?.stop();
+      compositorRef.current?.stop();
       inputStreamRef.current?.getTracks().forEach((t) => t.stop());
       if (channelRef.current) supabase.removeChannel(channelRef.current);
       endSession();
