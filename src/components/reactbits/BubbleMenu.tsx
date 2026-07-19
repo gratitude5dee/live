@@ -19,6 +19,7 @@ export interface BubbleMenuItem {
 
 export interface BubbleMenuProps {
   logo?: ReactNode | string;
+  logoHref?: string;
   onMenuClick?: (open: boolean) => void;
   className?: string;
   style?: CSSProperties;
@@ -37,6 +38,7 @@ const DEFAULT_ITEMS: BubbleMenuItem[] = [
 
 export default function BubbleMenu({
   logo,
+  logoHref,
   onMenuClick,
   className,
   style,
@@ -137,13 +139,29 @@ export default function BubbleMenu({
     <>
       <nav className={containerClassName} style={style} aria-label="Main">
         <div className="bubble logo-bubble" aria-label="Logo">
-          <span className="logo-content">
-            {typeof logo === "string" ? (
-              <img src={logo} alt="Logo" className="bubble-logo" />
-            ) : (
-              logo
-            )}
-          </span>
+          {logoHref ? (
+            <a
+              href={logoHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="logo-content"
+              aria-label="WZRD.tech"
+            >
+              {typeof logo === "string" ? (
+                <img src={logo} alt="WZRD" className="bubble-logo" />
+              ) : (
+                logo
+              )}
+            </a>
+          ) : (
+            <span className="logo-content">
+              {typeof logo === "string" ? (
+                <img src={logo} alt="Logo" className="bubble-logo" />
+              ) : (
+                logo
+              )}
+            </span>
+          )}
         </div>
         <button
           type="button"
