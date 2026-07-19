@@ -101,6 +101,7 @@ function StagePage() {
   const inferenceFrameRef = useRef<number | null>(null);
   const transportStateRef = useRef<"webrtc" | null>(null);
   const perfModeRef = useRef(false);
+  const pendingUploadRef = useRef(0);
 
   // --- Anonymous auth on mount ---
   useEffect(() => {
@@ -429,6 +430,7 @@ function StagePage() {
           setConnState("live");
         },
         onTransportChosen: (mode) => {
+          transportStateRef.current = mode;
           setTransport(mode);
           supabase
             .from("sessions")
@@ -648,6 +650,10 @@ function StagePage() {
     appliedRef.current = applied;
   }, [applied]);
 
+  useEffect(() => {
+    pendingUploadRef.current = pendingUpload;
+  }, [pendingUpload]);
+
   // Callback refs: attach srcObject the instant the <video> mounts (or remounts).
   const attachInputVideo = useCallback((el: HTMLVideoElement | null) => {
     inputVideoRef.current = el;
@@ -676,7 +682,7 @@ function StagePage() {
         .update({
           ended_at: new Date().toISOString(),
           stats: {
-            transport,
+            transport: transportStateRef.current,
             perf_mode: perfModeRef.current,
           },
         })
@@ -698,7 +704,7 @@ function StagePage() {
     document.addEventListener("visibilitychange", onVisibility);
 
     const beforeUnload = (e: BeforeUnloadEvent) => {
-      if (pendingUpload > 0 || recorderRef.current?.state === "recording") {
+      if (pendingUploadRef.current > 0 || recorderRef.current?.state === "recording") {
         e.preventDefault();
         e.returnValue = "";
       }
@@ -725,7 +731,7 @@ function StagePage() {
       endSession();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingUpload]);
+  }, []);
 
   // --- Keyboard shortcuts ---
   useEffect(() => {
