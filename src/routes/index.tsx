@@ -828,8 +828,11 @@ function StagePage() {
       window.removeEventListener("beforeunload", beforeUnload);
       document.removeEventListener("visibilitychange", onVisibility);
       if (hideTimer) clearTimeout(hideTimer);
+      if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
+
       if (inferenceFrameRef.current !== null) {
         cancelAnimationFrame(inferenceFrameRef.current);
         inferenceFrameRef.current = null;
