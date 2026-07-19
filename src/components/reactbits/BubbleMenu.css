@@ -52,10 +52,10 @@
 
 .bubble-menu .logo-bubble {
   width: auto;
-  min-height: var(--bubble-size);
-  height: var(--bubble-size);
-  padding: 0 20px;
-  border-radius: calc(var(--bubble-size) / 2);
+  min-height: calc(var(--bubble-size) * 2);
+  height: calc(var(--bubble-size) * 2);
+  padding: 0 28px;
+  border-radius: calc(var(--bubble-size));
   gap: 8px;
 }
 
@@ -68,19 +68,23 @@
 }
 
 .bubble-menu .bubble-logo {
-  max-height: 62%;
+  max-height: 72%;
   max-width: 100%;
   object-fit: contain;
   display: block;
-  filter: drop-shadow(0 0 12px rgba(96, 165, 250, 0.45));
+  filter: drop-shadow(0 0 16px rgba(96, 165, 250, 0.55));
 }
 
 .bubble-menu .logo-content {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 140px;
+  width: 220px;
   height: 100%;
+}
+
+@media (min-width: 768px) {
+  .bubble-menu .logo-content { width: 280px; }
 }
 
 .bubble-menu .menu-btn {
