@@ -943,7 +943,9 @@ function StagePage() {
         )}
 
         {/* Prompt dock */}
-        {connState !== "idle" && (
+        {/* Prompt dock */}
+        {(
+
           <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-[#2A2A35] bg-[#16161D] p-3">
             <input
               value={prompt}
