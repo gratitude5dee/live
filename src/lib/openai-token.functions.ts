@@ -30,7 +30,7 @@ export const mintOpenAIRealtimeSecret = createServerFn({ method: "POST" })
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     if (!OPENAI_API_KEY) throw new Error("OPENAI_API_KEY not configured");
 
-    const model = process.env.OPENAI_REALTIME_MODEL ?? "gpt-realtime-2-mini";
+    const model = process.env.OPENAI_REALTIME_MODEL ?? "gpt-realtime";
     const voice = "cedar";
 
     const res = await fetch("https://api.openai.com/v1/realtime/client_secrets", {
