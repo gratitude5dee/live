@@ -36,7 +36,7 @@ export class CompositeStream {
   ) {
     const fps = opts.fps ?? 30;
     const targetAspect = opts.targetAspect ?? 9 / 16;
-    const h = opts.targetHeight ?? 1280;
+    const h = opts.targetHeight ?? 1920;
     const w = Math.round(h * targetAspect);
     this.frameInterval = 1000 / fps;
     this.canvas = document.createElement("canvas");
