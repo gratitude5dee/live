@@ -9,6 +9,8 @@ import { FaceEngine, type FaceAction } from "@/lib/zap/face-engine";
 import { VisionBuffer } from "@/lib/zap/vision-buffer";
 import { drawHandOverlay } from "@/lib/zap/overlay";
 import { loadGestureRecognizer, loadFaceLandmarker } from "@/lib/zap/mediapipe";
+import LandingHero from "@/components/zap/LandingHero";
+import SpecularButton from "@/components/reactbits/SpecularButton";
 import {
   REACTIVE_PROMPTS,
   type ConnectionState,
@@ -765,6 +767,24 @@ function StagePage() {
         ? "bg-red-500"
         : "bg-amber-500";
 
+  if (connState === "idle") {
+    return (
+      <>
+        <LandingHero
+          onEnter={() => {
+            if (authReady) startSession();
+          }}
+          disabled={!authReady}
+        />
+        {error && (
+          <div className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200 backdrop-blur">
+            {error}
+          </div>
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#0A0A0F] text-[#FAFAFA]">
       {/* Header */}
@@ -811,16 +831,18 @@ function StagePage() {
             Library
           </Link>
           {connState === "live" && (
-            <button
+            <SpecularButton
+              size="sm"
+              radius={10}
               onClick={toggleRecord}
-              className={`rounded-md px-3 py-1.5 text-xs font-medium ${
-                recording
-                  ? "bg-[#F87171] text-black"
-                  : "bg-[#F87171]/20 text-[#F87171] hover:bg-[#F87171]/30"
-              }`}
+              tint={recording ? "#F87171" : "#F87171"}
+              tintOpacity={recording ? 0.9 : 0.15}
+              textColor={recording ? "#0a0a0f" : "#fca5a5"}
+              lineColor="#fca5a5"
+              baseColor="#7f1d1d"
             >
               {recording ? "■ Stop" : "⬤ Record"}
-            </button>
+            </SpecularButton>
           )}
         </div>
       </header>
@@ -833,27 +855,9 @@ function StagePage() {
 
       {/* Stage */}
       <main className="relative mx-auto max-w-6xl p-4">
-        {connState === "idle" && (
-          <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 rounded-2xl border border-[#2A2A35] bg-gradient-to-br from-[#16161D] to-[#0A0A0F] p-12 text-center">
-            <h1 className="bg-gradient-to-r from-[#22D3EE] to-[#E879F9] bg-clip-text text-5xl font-bold text-transparent">
-              Your webcam is the timeline.
-            </h1>
-            <p className="max-w-md text-[#9CA3AF]">
-              Edit the live feed with prompts, presets, and hand gestures. Lucy 2.5
-              repaints every frame in under a second.
-            </p>
-            <button
-              onClick={startSession}
-              disabled={!authReady}
-              className="rounded-xl bg-[#22D3EE] px-6 py-3 font-semibold text-black transition hover:bg-[#67E8F9] disabled:opacity-50"
-            >
-              {authReady ? "Enable Camera" : "Loading…"}
-            </button>
-          </div>
-        )}
-
-        {connState !== "idle" && (
+        {(
           <div className="relative aspect-video overflow-hidden rounded-2xl border border-[#2A2A35] bg-black">
+
             <video
               ref={outputVideoRef}
               className="h-full w-full object-cover"
@@ -913,7 +917,9 @@ function StagePage() {
         )}
 
         {/* Preset rail */}
-        {connState !== "idle" && (
+        {/* Preset rail */}
+        {(
+
           <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
             {presets.map((p, i) => (
               <button
@@ -939,7 +945,7 @@ function StagePage() {
         )}
 
         {/* Prompt dock */}
-        {connState !== "idle" && (
+        {(
           <div className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-[#2A2A35] bg-[#16161D] p-3">
             <input
               value={prompt}
@@ -978,12 +984,18 @@ function StagePage() {
                 className="h-8 w-8 rounded object-cover"
               />
             )}
-            <button
+            <SpecularButton
+              size="sm"
+              radius={10}
               onClick={() => prompt.trim() && applyPrompt(prompt, "text")}
-              className="rounded-md bg-[#22D3EE] px-4 py-2 text-xs font-semibold text-black hover:bg-[#67E8F9]"
+              tint="#22D3EE"
+              tintOpacity={0.18}
+              textColor="#67e8f9"
+              lineColor="#67e8f9"
+              baseColor="#0e7490"
             >
               Apply
-            </button>
+            </SpecularButton>
             <button
               onClick={undo}
               disabled={!prevApplied}
