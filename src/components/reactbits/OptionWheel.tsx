@@ -3,6 +3,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useLayoutEffect,
   type CSSProperties,
 } from "react";
 import "./OptionWheel.css";
@@ -67,6 +68,7 @@ const OptionWheel = ({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioUrlRef = useRef("");
   const lastTickRef = useRef(0);
+  const forceFirstPaintRef = useRef(true);
   const [selectedIndex, setSelectedIndex] = useState(defaultSelected);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -93,20 +95,15 @@ const OptionWheel = ({
     soundVolume,
   };
 
-  const runFrame = useCallback((now: number) => {
-    const dt = Math.min((now - lastRef.current) / 1000, 0.05);
-    lastRef.current = now;
+  // Lay every item out along the curve. When forceFirstPaintRef is set the
+  // pass runs unconditionally so freshly-mounted refs always receive their
+  // transform even when target === current (no settling motion needed).
+  const layout = useCallback(() => {
     const cfg = cfgRef.current;
-    const tau = Math.max(cfg.smoothing, 1) / 1000;
-    const k = 1 - Math.exp(-dt / tau);
-    const target = targetRef.current;
-    const cur = posRef.current;
-    let next = cur + (target - cur) * k;
-    const settled = Math.abs(target - next) < 0.001;
-    if (settled) next = target;
-    posRef.current = next;
     const els = itemRefs.current;
     const n = cfg.count;
+    if (!n) return;
+    const next = posRef.current;
     const mirror = cfg.side === "right" ? -1 : 1;
     const tiltRad = (cfg.tilt * Math.PI) / 180;
     const R = tiltRad > 0.0005 ? cfg.rowH / tiltRad : 0;
@@ -137,8 +134,28 @@ const OptionWheel = ({
         Math.max(0, 1 - Math.min(dist, 1)).toFixed(4),
       );
     }
-    rafRef.current = settled ? null : requestAnimationFrame(runFrame);
   }, []);
+
+  const runFrame = useCallback(
+    (now: number) => {
+      const dt = Math.min((now - lastRef.current) / 1000, 0.05);
+      lastRef.current = now;
+      const cfg = cfgRef.current;
+      const tau = Math.max(cfg.smoothing, 1) / 1000;
+      const k = 1 - Math.exp(-dt / tau);
+      const target = targetRef.current;
+      const cur = posRef.current;
+      let next = cur + (target - cur) * k;
+      const settled = Math.abs(target - next) < 0.001;
+      if (settled) next = target;
+      posRef.current = next;
+      layout();
+      const force = forceFirstPaintRef.current;
+      forceFirstPaintRef.current = false;
+      rafRef.current = settled && !force ? null : requestAnimationFrame(runFrame);
+    },
+    [layout],
+  );
 
   const startLoop = useCallback(() => {
     if (rafRef.current != null) return;
@@ -182,6 +199,7 @@ const OptionWheel = ({
     [startLoop, playTick],
   );
 
+  // Wheel / touchpad
   useEffect(() => {
     const el = rootRef.current;
     if (!el) return;
@@ -260,8 +278,14 @@ const OptionWheel = ({
     [applyTarget],
   );
 
-  useEffect(() => {
-    applyTarget(targetRef.current, false);
+  // Layout synchronously after every commit — this guarantees items receive
+  // transforms as soon as their refs are attached, avoiding the "all labels
+  // stacked on top of each other" flash while presets load in.
+  useLayoutEffect(() => {
+    forceFirstPaintRef.current = true;
+    layout();
+    // Also nudge one animated frame so any pending easing continues.
+    startLoop();
   }, [
     items,
     fontSize,
@@ -274,7 +298,8 @@ const OptionWheel = ({
     side,
     loop,
     smoothing,
-    applyTarget,
+    layout,
+    startLoop,
   ]);
 
   useEffect(
@@ -306,18 +331,21 @@ const OptionWheel = ({
       onPointerCancel={handlePointerEnd}
       onKeyDown={handleKeyDown}
     >
+      {/* Center indicator — anchored slot marker */}
+      <span aria-hidden className="option-wheel__indicator" />
+
       {items.map((label, index) => (
         <div
           key={`${label}-${index}`}
           ref={(el) => {
-            itemRefs.current[index] = el;
+            if (el) itemRefs.current[index] = el;
           }}
           role="option"
           aria-selected={selectedIndex === index}
           className={`option-wheel__item${selectedIndex === index ? " option-wheel__item--selected" : ""}`}
           onClick={() => handleItemClick(index)}
         >
-          {label}
+          <span className="option-wheel__label">{label}</span>
         </div>
       ))}
     </div>
