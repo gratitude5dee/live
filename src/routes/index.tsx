@@ -222,17 +222,45 @@ function StagePage() {
     await logPromptEvent("clear", "gesture", null);
   }, [applied, logPromptEvent]);
 
+  const presetRefCache = useRef<Map<string, { dataUri: string; path: string }>>(new Map());
+
+  const loadPresetRef = useCallback(async (url: string) => {
+    const cached = presetRefCache.current.get(url);
+    if (cached) return cached;
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const dataUri: string = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+    const entry = { dataUri, path: url };
+    presetRefCache.current.set(url, entry);
+    return entry;
+  }, []);
+
   const applyPreset = useCallback(
     async (preset: Preset, source: "preset" | "gesture" | "remote" = "preset") => {
-      if (preset.requires_ref && !refImage) {
+      let ref = refImage;
+      if (preset.ref_image_url) {
+        try {
+          ref = await loadPresetRef(preset.ref_image_url);
+          setRefImage(ref);
+        } catch {
+          toast.error(`Couldn't load reference for ${preset.name}`);
+          return;
+        }
+      } else if (preset.requires_ref && !refImage) {
         toast.error(`${preset.name} needs a reference image`);
         return;
       }
       currentPresetIndex.current = presets.findIndex((p) => p.id === preset.id);
-      await applyPrompt(preset.prompt, source, refImage);
+      await applyPrompt(preset.prompt, source, ref);
     },
-    [applyPrompt, refImage, presets],
+    [applyPrompt, refImage, presets, loadPresetRef],
   );
+
 
   // --- Reactive Face: fire a preset for 4s then auto-revert ---
   const triggerReactive = useCallback(
