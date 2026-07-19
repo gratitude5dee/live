@@ -129,6 +129,22 @@ function StagePage() {
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStopScheduledRef = useRef(false);
 
+  // Pick raw camera vs compositor for the outbound video track based on
+  // the active preset kind, and hot-swap via replaceTrack (no renegotiate).
+  const syncOutboundSource = useCallback(() => {
+    const transport = transportRef.current;
+    if (!transport) return;
+    const kind = activePresetKindRef.current;
+    const useComposite = kind === "character_swap" || kind === "gesture_fx";
+    const src = useComposite
+      ? compositorRef.current?.stream ?? inputStreamRef.current
+      : inputStreamRef.current;
+    const track = src?.getVideoTracks()[0] ?? null;
+    if (track) void transport.replaceVideoTrack(track);
+  }, []);
+
+
+
 
   // --- Anonymous auth on mount ---
   useEffect(() => {
