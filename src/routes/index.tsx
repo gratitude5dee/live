@@ -207,8 +207,10 @@ function StagePage() {
       disposeCompositor();
     } else {
       const kind = activePresetKindRef.current;
-      const useComposite = kind === "character_swap" || kind === "gesture_fx";
-      if (useComposite) {
+      const wantsComposite =
+        (kind === "character_swap" || kind === "gesture_fx") &&
+        bakeLandmarksRef.current;
+      if (wantsComposite) {
         src = ensureCompositor() ?? inputStreamRef.current;
         label = compositorRef.current ? "composite" : "raw";
       } else {
@@ -223,6 +225,13 @@ function StagePage() {
     if (track) void transport.replaceVideoTrack(track);
     setActiveSource(label);
   }, [ensureCompositor, disposeCompositor]);
+
+  const toggleBakeLandmarks = useCallback(() => {
+    setBakeLandmarks((v) => !v);
+    // syncOutboundSource reads bakeLandmarksRef, which the effect syncs after
+    // state updates — defer the swap so the ref has the new value.
+    queueMicrotask(() => syncOutboundSource());
+  }, [syncOutboundSource]);
 
   const toggleDepth = useCallback(async () => {
     if (!depthAvailable) {
