@@ -1,32 +1,44 @@
-## OptionWheel: fix stacking + upgrade visual polish
+# Plan: Elevate "Choose Your Reality" + add "Modes" section
 
-### Root cause of the stacked labels
-The rAF layout tries to place items before their refs are attached in the React 19 commit order. When presets load async (empty → 6 items), the layout effect fires once, but if `settled` is true on the first frame (`pos === target === 0`), the loop paints exactly one frame — and that frame runs before the item refs are guaranteed populated in some renders. Result: every `.option-wheel__item` keeps its default CSS (`position:absolute; top:50%; left:40px`) and stacks on top of each other, exactly like the screenshot.
+## 1. Redesign `ChooseReality` section
 
-### Fixes in `src/components/reactbits/OptionWheel.tsx`
-1. Swap the layout-driving `useEffect` for `useLayoutEffect` so item transforms are written before browser paint.
-2. Track `items.length` and re-run the initial layout after refs are attached (call `applyTarget(targetRef.current, false)` inside a `useLayoutEffect` keyed on `items`).
-3. In `runFrame`, always paint at least one full pass on the first tick (bypass the `settled` early-exit for the very first invocation after a config change) — guarantees every item gets a transform once refs land.
-4. Guard against a null `el` and skip clearing existing entries when the callback ref is called with `null` (React unmount transient).
+Current issues visible in screenshot:
+- OptionWheel labels bleed off the left edge and collide with the BubbleMenu.
+- Gradient headline ("Hooded Windbreaker") gets clipped.
+- Layout feels unbalanced — wheel on left, preview floating far right, empty middle.
+- No section header/eyebrow — user doesn't know what this section is.
 
-### Visual upgrade in `src/components/reactbits/OptionWheel.css`
-Match the reference (Awwwards-tier, apple-esque):
-- Font family: use the app's premium display stack (fall back to `ui-sans-serif`), weight `300` resting / `600` selected, letter-spacing `-0.03em`.
-- Selected item: gradient text fill (`cyan → violet → pink`) via `background-clip:text`, plus a soft cyan glow.
-- Add a subtle **center indicator bar** — a 2px horizontal accent on the anchored edge (`left:0`, `top:50%`, `width:24px`, gradient white→transparent) so the "active slot" reads clearly.
-- Remove the harsh black gradient masks in `ChooseReality` that were hiding the first characters; replace with a single soft radial vignette behind the wheel.
-- Increase container height to `600px`, bump `inset` to `56`, `fontSize` to `3.2`, `spacing` to `1.55`, `tilt` to `8`, `blur` to `1.2` for a more premium curl.
-- On mobile (`<768px`) drop `fontSize` to `2.2` and `inset` to `28`, and stack wheel above preview card.
+Redesign (frontend only, `src/components/zap/ChooseReality.tsx` + CSS):
+- Add a proper section shell: eyebrow tag ("01 — REALITIES"), massive H2 "Choose your reality.", short subcopy. Generous `py-32` breathing room.
+- Two-column split with safe gutters (`px-8 lg:px-16`, wheel column starts well clear of the BubbleMenu — `pl-32` on lg).
+- Wheel column: constrain OptionWheel to a fixed inner width, mask fade top/bottom, ensure selected label truncates with ellipsis rather than clipping. Replace raw gradient text with a tighter "Double-Bezel" active-item chip so long names ("Hooded Windbreaker") stay contained.
+- Preview column: keep the 9:16 double-bezel card, but frame it inside a nested aluminum shell (outer `rounded-[2.5rem] ring-1 ring-white/5 bg-white/[0.02] p-2`, inner `rounded-[calc(2.5rem-0.5rem)]`). Add a soft radial glow behind the card driven by the selected preset's dominant color.
+- CTA: replace plain "Zap this reality" pill with the button-in-button pattern (pill + nested circular arrow), plus a secondary ghost "Shuffle" that spins the wheel.
+- Motion: fade/blur-up entry via IntersectionObserver, custom cubic-bezier transitions on card swap, magnetic hover on CTA.
 
-### Section polish in `src/components/zap/ChooseReality.tsx`
-- Vertically align the wheel middle with the preview card middle (`items-center` + matching min-heights).
-- Preview card wrapped in a Double-Bezel: outer `bg-white/[0.04] p-1.5 ring-1 ring-white/10 rounded-[2.25rem]`, inner card `rounded-[calc(2.25rem-0.375rem)]`.
-- Add loop `loop={true}` so the wheel wraps infinitely — feels endless.
-- Wire a soft tick sound (optional, only if `sessionStorage.zaplive.mute !== '1'`) using a data-URI base64 short click so no asset upload needed.
-- Preload the next/prev preset thumbnail so switching feels instant.
+## 2. New "Modes" section (below Choose Your Reality)
 
-### Not changing
-- Wheel component API stays identical; drop-in.
-- No DB/schema changes.
+Purpose: let users browse the *kinds of edits* Lucy can do (object add-in, character switch, background switch, style transfer, weather/time shift, lighting/mood). Selection is presentational only for now — no wiring into the live prompt pipeline unless requested later.
 
-Result: labels lay out along the curve, active option pops with gradient + glow, alignment matches the reference, no clipped characters.
+Files:
+- `src/components/reactbits/CircularGallery.tsx` + `CircularGallery.css` — copy component source verbatim (JS→TSX with minimal typing, or keep as `.jsx`). Uses existing `ogl` dep (already installed).
+- `src/components/zap/ModesSection.tsx` — section wrapper.
+- `src/components/zap/LandingHero.tsx` — mount `<ModesSection />` below `<ChooseReality />`.
+
+Section layout:
+- Eyebrow "02 — MODES", H2 "Every reality has a lever.", one-line subcopy.
+- Full-bleed `CircularGallery` at ~600px height with `bend={3}`, `borderRadius={0.05}`, `textColor="#ffffff"`, custom Orbitron/Geist font via `fontUrl`.
+- Items (6): Object Add-In, Character Switch, Background Switch, Style Transfer, Weather Shift, Lighting Mood — each with a curated cover image (reuse existing preset thumbnails from Supabase where relevant, plus 2–3 new picsum/unsplash seeds).
+- Below the gallery: a live-updating caption row (mode name + short description) tied to a lightweight state hook. Keep it purely visual — no DB writes.
+
+## 3. Guardrails
+
+- Frontend/presentation only. No schema, no server functions, no changes to `fal-transport` or `routes/index.tsx` pipeline.
+- Reuse existing design tokens in `src/styles.css`; no hardcoded colors.
+- Verify OptionWheel no longer clips by taking a Playwright element screenshot of the section post-change.
+
+## Technical notes
+
+- CircularGallery uses `ogl` (already in deps). Wrap in `<ClientOnly>`-equivalent guard (`useEffect` mount + `typeof window` check inside the component's effect — the source already gates on `containerRef.current`, so a dynamic `React.lazy` import from the section is enough).
+- The provided source has an empty `return ( … )` — must add `<div ref={containerRef} className="circular-gallery" tabIndex={0} />` when copying.
+- Font URL: load Orbitron via the component's `fontUrl` prop; no `@import` in `styles.css` needed.
