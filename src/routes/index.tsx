@@ -1568,6 +1568,13 @@ function StagePage() {
     toggleDepth,
     depthStream,
     activeSource,
+    voiceState,
+    voiceTranscript,
+    voiceAck,
+    voiceIntent,
+    voiceIntentLabel: voiceIntent ? editLabel(voiceIntent) : null,
+    voiceAvailable,
+    toggleVoice: () => void toggleVoice(),
   };
 
   return (
