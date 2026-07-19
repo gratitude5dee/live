@@ -143,6 +143,21 @@ function StagePage() {
   // Surfaced in the camera PiP so users can confirm the pipeline at a glance.
   const [activeSource, setActiveSource] = useState<"raw" | "composite" | "depth">("raw");
 
+  // Baked landmarks (compositor) is opt-in — sending the raw 1080p track keeps
+  // Lucy's output sharp. Character-Swap / Gesture-FX presets can opt-in from
+  // the camera PiP if they want landmarks composited into the outbound frame.
+  const [bakeLandmarks, setBakeLandmarks] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.sessionStorage.getItem("zap:bakeLandmarks") === "1";
+  });
+  const bakeLandmarksRef = useRef(bakeLandmarks);
+  useEffect(() => {
+    bakeLandmarksRef.current = bakeLandmarks;
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem("zap:bakeLandmarks", bakeLandmarks ? "1" : "0");
+    }
+  }, [bakeLandmarks]);
+
   // Lazily build / dispose the compositor. On mobile Safari, the extra 30fps
   // canvas re-encode is expensive and softens the feed, so we only spin it
   // up when a Character-Swap or Gesture-FX preset actually needs baked
@@ -192,8 +207,10 @@ function StagePage() {
       disposeCompositor();
     } else {
       const kind = activePresetKindRef.current;
-      const useComposite = kind === "character_swap" || kind === "gesture_fx";
-      if (useComposite) {
+      const wantsComposite =
+        (kind === "character_swap" || kind === "gesture_fx") &&
+        bakeLandmarksRef.current;
+      if (wantsComposite) {
         src = ensureCompositor() ?? inputStreamRef.current;
         label = compositorRef.current ? "composite" : "raw";
       } else {
@@ -208,6 +225,13 @@ function StagePage() {
     if (track) void transport.replaceVideoTrack(track);
     setActiveSource(label);
   }, [ensureCompositor, disposeCompositor]);
+
+  const toggleBakeLandmarks = useCallback(() => {
+    setBakeLandmarks((v) => !v);
+    // syncOutboundSource reads bakeLandmarksRef, which the effect syncs after
+    // state updates — defer the swap so the ref has the new value.
+    queueMicrotask(() => syncOutboundSource());
+  }, [syncOutboundSource]);
 
   const toggleDepth = useCallback(async () => {
     if (!depthAvailable) {
@@ -1234,6 +1258,22 @@ function StagePage() {
     toast.success("Reference set");
   };
 
+  const clearRefImage = useCallback(() => {
+    setRefImage(null);
+    // If a prompt is currently applied with a ref, re-apply it without one
+    // so Lucy immediately drops the reference from the live feed.
+    if (appliedRef.current?.refImage && transportRef.current) {
+      transportRef.current.send({
+        prompt: appliedRef.current.text,
+        enable_prompt_expansion: enhance,
+      });
+      const next: PromptState = { text: appliedRef.current.text };
+      setApplied(next);
+    }
+    toast("Reference cleared");
+  }, [enhance]);
+
+
   const savePreset = async () => {
     if (!applied?.text) return;
     const name = window.prompt("Preset name?");
@@ -1312,6 +1352,12 @@ function StagePage() {
     toggleRecord,
     stopSession: (r?: "manual" | "timeout") => void stopSession(r),
     onRefUpload,
+    clearRefImage,
+    bakeLandmarks,
+    toggleBakeLandmarks,
+    landmarksAvailable:
+      activePresetKindRef.current === "character_swap" ||
+      activePresetKindRef.current === "gesture_fx",
     savePreset,
     flipCamera,
     presets,

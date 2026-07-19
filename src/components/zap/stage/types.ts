@@ -41,8 +41,10 @@ export interface StageViewProps {
   toggleRecord: () => void;
   stopSession: (reason?: "manual" | "timeout") => void;
   onRefUpload: (file: File) => void;
+  clearRefImage: () => void;
   savePreset: () => void;
   flipCamera: () => void;
+
 
   // presets
   presets: Preset[];
@@ -62,4 +64,10 @@ export interface StageViewProps {
 
   // which stream is currently being sent to Lucy — for on-screen confirmation
   activeSource: "raw" | "composite" | "depth";
+
+  // baked-landmark compositor toggle (character_swap / gesture_fx only)
+  bakeLandmarks: boolean;
+  toggleBakeLandmarks: () => void;
+  landmarksAvailable: boolean;
+
 }
