@@ -85,6 +85,12 @@ function StagePage() {
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
   const [download, setDownload] = useState<{ url: string; filename: string } | null>(null);
   const [flipping, setFlipping] = useState(false);
+  const [voiceState, setVoiceState] = useState<VoiceState>("off");
+  const [voiceTranscript, setVoiceTranscript] = useState<string>("");
+  const [voiceAck, setVoiceAck] = useState<string>("");
+  const [voiceIntent, setVoiceIntent] = useState<EditTypeId | null>(null);
+  const voiceAgentRef = useRef<VoiceAgent | null>(null);
+  const voiceAvailable = isVoiceSupported();
   const [templateDialog, setTemplateDialog] = useState<{
     key: TemplateKey;
     name: string;
