@@ -780,6 +780,10 @@ function StagePage() {
     }
   }, [uploadTake]);
 
+  useEffect(() => {
+    startRecordingRef.current = startRecording;
+  }, [startRecording]);
+
   const toggleRecord = useCallback(() => {
     if (recording) {
       recorderRef.current?.stop();
