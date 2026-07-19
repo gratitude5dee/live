@@ -625,23 +625,24 @@ function StagePage() {
     appliedRef.current = applied;
   }, [applied]);
 
-  // Attach input MediaStream once the PiP <video> is mounted.
-  useEffect(() => {
-    const v = inputVideoRef.current;
-    if (v && inputStream && v.srcObject !== inputStream) {
-      v.srcObject = inputStream;
-      v.play().catch(() => {});
+  // Callback refs: attach srcObject the instant the <video> mounts (or remounts).
+  const attachInputVideo = useCallback((el: HTMLVideoElement | null) => {
+    inputVideoRef.current = el;
+    const s = inputStreamRef.current;
+    if (el && s && el.srcObject !== s) {
+      el.srcObject = s;
+      el.play().catch(() => {});
     }
-  }, [inputStream]);
+  }, []);
 
-  // Attach fal output MediaStream once the main <video> is mounted.
-  useEffect(() => {
-    const v = outputVideoRef.current;
-    if (v && outputStream && v.srcObject !== outputStream) {
-      v.srcObject = outputStream;
-      v.play().catch(() => {});
+  const attachOutputVideo = useCallback((el: HTMLVideoElement | null) => {
+    outputVideoRef.current = el;
+    const s = outputStreamRef.current;
+    if (el && s && el.srcObject !== s) {
+      el.srcObject = s;
+      el.play().catch(() => {});
     }
-  }, [outputStream]);
+  }, []);
 
   // --- Cleanup, tab-hidden pause, un-uploaded warning ---
   useEffect(() => {
