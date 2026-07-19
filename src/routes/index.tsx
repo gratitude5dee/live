@@ -72,6 +72,8 @@ function StagePage() {
   const [perfMode, setPerfMode] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(0);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  const [download, setDownload] = useState<{ url: string; filename: string } | null>(null);
+  const autoRecordRef = useRef(false);
 
 
 
