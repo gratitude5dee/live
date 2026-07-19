@@ -126,7 +126,7 @@ export default function SiteFooter() {
               />
             </p>
             <p className="mt-4 text-[11px] uppercase tracking-[0.28em] text-white/40">
-              Powered by Lucy 2.5 · fal.ai
+              POWERED BY ZAPS! LIVE BY WZRD.TECH
             </p>
           </div>
 
