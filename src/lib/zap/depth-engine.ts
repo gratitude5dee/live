@@ -52,12 +52,16 @@ export class DepthEngine {
 
 
   constructor(opts: DepthAttachOptions = {}) {
+    this.firstFrame = new Promise<void>((res) => {
+      this.firstFrameResolve = res;
+    });
     this.opts = {
       fps: opts.fps ?? 24,
       targetAspect: opts.targetAspect ?? 9 / 16,
       targetHeight: opts.targetHeight ?? 1280,
       inputSize: opts.inputSize ?? 392,
     };
+
     const h = this.opts.targetHeight;
     const w = Math.round(h * this.opts.targetAspect);
     this.canvas = document.createElement("canvas");
