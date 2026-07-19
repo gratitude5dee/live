@@ -108,14 +108,20 @@ export default function SiteFooter() {
         <div className="grid grid-cols-1 gap-12 md:grid-cols-12">
           {/* Brand */}
           <div className="md:col-span-5">
-            <a href="#top" className="inline-flex items-center gap-3">
-              <img
-                src={wzrdLogo.url}
-                alt="WZRD.tech"
-                className="h-10 w-auto select-none drop-shadow-[0_0_18px_rgba(76,140,255,0.55)]"
-                draggable={false}
-              />
-            </a>
+          <a
+            href="https://wzrd.tech"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-3"
+            aria-label="WZRD.tech"
+          >
+            <img
+              src={wzrdLogo.url}
+              alt="WZRD.tech"
+              className="h-10 w-auto select-none drop-shadow-[0_0_18px_rgba(76,140,255,0.55)]"
+              draggable={false}
+            />
+          </a>
             <p className="mt-5 max-w-sm text-sm leading-relaxed text-white/70">
               <ShinyText
                 text={"Bend your reality. Realtime video, repainted every frame by Zaps! live by WZRD Tech, Inc."}
