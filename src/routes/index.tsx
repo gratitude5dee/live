@@ -222,17 +222,45 @@ function StagePage() {
     await logPromptEvent("clear", "gesture", null);
   }, [applied, logPromptEvent]);
 
+  const presetRefCache = useRef<Map<string, { dataUri: string; path: string }>>(new Map());
+
+  const loadPresetRef = useCallback(async (url: string) => {
+    const cached = presetRefCache.current.get(url);
+    if (cached) return cached;
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const dataUri: string = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result as string);
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(blob);
+    });
+    const entry = { dataUri, path: url };
+    presetRefCache.current.set(url, entry);
+    return entry;
+  }, []);
+
   const applyPreset = useCallback(
     async (preset: Preset, source: "preset" | "gesture" | "remote" = "preset") => {
-      if (preset.requires_ref && !refImage) {
+      let ref = refImage;
+      if (preset.ref_image_url) {
+        try {
+          ref = await loadPresetRef(preset.ref_image_url);
+          setRefImage(ref);
+        } catch {
+          toast.error(`Couldn't load reference for ${preset.name}`);
+          return;
+        }
+      } else if (preset.requires_ref && !refImage) {
         toast.error(`${preset.name} needs a reference image`);
         return;
       }
       currentPresetIndex.current = presets.findIndex((p) => p.id === preset.id);
-      await applyPrompt(preset.prompt, source, refImage);
+      await applyPrompt(preset.prompt, source, ref);
     },
-    [applyPrompt, refImage, presets],
+    [applyPrompt, refImage, presets, loadPresetRef],
   );
+
 
   // --- Reactive Face: fire a preset for 4s then auto-revert ---
   const triggerReactive = useCallback(
@@ -1148,18 +1176,36 @@ function StagePage() {
         {(
 
           <div className="mt-4 flex gap-2 overflow-x-auto pb-2">
-            {presets.map((p, i) => (
-              <button
-                key={p.id}
-                onClick={() => applyPreset(p)}
-                disabled={p.requires_ref && !refImage}
-                className="flex min-w-[80px] flex-col items-center gap-1 rounded-xl border border-[#2A2A35] bg-[#16161D] px-3 py-2 text-xs transition hover:border-[#22D3EE] disabled:opacity-40"
-                title={`${p.name} (${i < 9 ? i + 1 : 0})`}
-              >
-                <span className="text-xl">{p.emoji}</span>
-                <span className="text-[#9CA3AF]">{p.name}</span>
-              </button>
-            ))}
+            {presets.map((p, i) => {
+              const hasThumb = !!p.thumbnail_url;
+              const disabled = p.requires_ref && !p.ref_image_url && !refImage;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => applyPreset(p)}
+                  disabled={disabled}
+                  className="group relative flex min-w-[84px] flex-col items-center gap-1 overflow-hidden rounded-xl border border-[#2A2A35] bg-[#16161D] text-xs transition hover:border-[#22D3EE] disabled:opacity-40"
+                  title={`${p.name} (${i < 9 ? i + 1 : 0})`}
+                >
+                  {hasThumb ? (
+                    <div className="relative h-14 w-full overflow-hidden">
+                      <img
+                        src={p.thumbnail_url!}
+                        alt={p.name}
+                        className="h-full w-full object-cover transition group-hover:scale-105"
+                      />
+                      <span className="absolute right-1 top-1 rounded bg-black/60 px-1 text-[10px] leading-none py-0.5">
+                        {p.emoji}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="mt-2 text-xl">{p.emoji}</span>
+                  )}
+                  <span className="px-2 pb-1.5 text-[#9CA3AF] truncate max-w-[84px]">{p.name}</span>
+                </button>
+              );
+            })}
+
             {applied && (
               <button
                 onClick={savePreset}
