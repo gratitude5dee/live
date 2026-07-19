@@ -1,42 +1,45 @@
-## Diagnosis (unconfirmed for the exact video wiring, confirmed for transport shape)
+## Diagnosis
 
-Lucy 2.5 (`decart/lucy-2-5/realtime`) is a **WebRTC video-to-video** model. Per fal docs the SDK's `fal.realtime.connect()` establishes a WebSocket that carries WebRTC signaling; `send({ prompt })` only ships prompt updates. There is **no `image_url` frame-push path** for this endpoint — the current `fal-transport.ts` frame loop and hand-rolled `type: "offer"/"answer"/"candidate"` message shape do not match the protocol, which is why both video panels stay black even though the token mints and a "connected" pill shows.
+**Do I know what the issue is? Yes.** The camera is producing frames—MediaPipe detects the hand—so camera permission and `getUserMedia()` are working. The failure is in transport and rendering:
 
-The reference snippet you pasted also shows two smaller mismatches we need to fix:
+- The installed `@fal-ai/client` realtime client is WebSocket-only; its source contains no `RTCPeerConnection` or `MediaStream` handling.
+- `fal-transport.ts` currently invents `offer`, `answer`, and ICE-candidate messages over that WebSocket. Lucy never returns the expected SDP answer, so no remote track is created and the main stage remains black.
+- The header marks transport as WebRTC before a peer connection is established, masking the failure.
+- Gesture and face inference run back-to-back against separate MediaPipe WASM tasks; current logs confirm repeated `memory access out of bounds` crashes.
 
-- `tokenProvider` must return a **string**, not `{ token }`.
-- `tokenExpirationSeconds` should be passed to `connect()`.
+## Fix plan
 
-## What to build
+1. **Replace the guessed signaling implementation**
+   - Use fal’s documented WMA WebRTC flow: create the peer connection, attach the webcam, wait for complete ICE gathering, send the SDP offer to `https://wma.fal.run/session`, and apply the returned SDP answer.
+   - Proxy session creation and heartbeat through authenticated TanStack server functions so `FAL_KEY` never reaches the browser.
+   - Do not use trickle ICE because the documented WMA bridge does not support it.
 
-### 1. Simplify the token flow
-- `src/lib/fal-token.functions.ts`: keep the server fn, but change return to plain string (`return token;`) so `tokenProvider` can return it directly. Keep the rate-limit + `app` allowlist checks.
-- `src/lib/zap/fal-transport.ts`: `tokenProvider: async (app) => await mintFalRealtimeToken({ data: { app } })`, plus `tokenExpirationSeconds: 60`.
+2. **Make connection state truthful**
+   - Report `connecting` while negotiating.
+   - Switch to `live · webrtc` only after a remote video track arrives and the peer connection reaches `connected`.
+   - Surface signaling, ICE, timeout, and remote-track failures in the existing error strip instead of leaving a black stage.
+   - Keep the local camera PiP visible independently of Lucy, so transport failure cannot hide a working webcam.
 
-### 2. Replace the transport with SDK-driven WebRTC
-Rewrite `src/lib/zap/fal-transport.ts` to match how Lucy's realtime actually works:
+3. **Wire realtime controls to the WebRTC session**
+   - Capture the session’s control data channel and send Lucy prompt/reference updates through it using the endpoint’s prompt payload.
+   - Queue the latest prompt until the channel opens, then flush it.
+   - Add heartbeat and deterministic cleanup for the WMA session, peer connection, data channel, and camera tracks.
 
-- Open `fal.realtime.connect(LUCY_APP, { onResult, onError, tokenProvider, tokenExpirationSeconds })`.
-- Create one `RTCPeerConnection`, `addTrack` from the input `MediaStream`, and set `pc.ontrack` to publish the returned `MediaStream` via `cb.onOutputStream`.
-- Drive signaling through the SDK connection: when the SDK emits `iceServers` / `answer` / `candidate` payloads on `onResult`, apply them to the PC; when the PC emits local ICE candidates or an offer, forward via `connection.send({...})`. (This mirrors the WMA browser example and is the shape fal's realtime bridge speaks.)
-- Remove the frame-push (`canvas.toDataURL` + `image_url`) path entirely. Also remove the `outputCanvas.captureStream()` fallback — recording will tap the real remote `MediaStream`.
-- Keep `setOutboundPaused` (toggling sender `track.enabled`), keep `send({ prompt, enable_prompt_expansion, reference_image_url? })` for prompt updates only, and expose a single `mode: "webrtc"` (drop dual-mode UI).
+4. **Stabilize MediaPipe**
+   - Alternate gesture and face inference rather than invoking both WASM tasks in the same animation frame.
+   - Enforce one inference at a time, strictly increasing integer timestamps, and stop the loop after a fatal WASM error instead of flooding the console.
+   - Preserve the existing gesture/face behavior and adaptive performance mode.
 
-### 3. Update the stage to reflect single-mode transport
-`src/routes/index.tsx`:
-- Drop the "frame" chip and the fallback timer messaging; header just shows `live · webrtc` or `connecting`.
-- `MediaRecorder` records the remote stream from `onOutputStream` (already wired) — no change needed once the transport actually produces a real remote stream.
-- Keep camera preview attached via existing callback ref.
+5. **Verify the actual signals**
+   - Confirm the local PiP renders non-black camera pixels.
+   - Confirm the WMA session request returns an SDP answer, peer state reaches `connected`, and a remote track attaches before showing `live`.
+   - Confirm prompt changes are sent only after the control channel opens.
+   - Confirm the console no longer emits MediaPipe memory errors and that cleanup ends the session cleanly.
 
-### 4. Verify
-- After edits, load `/`, click Zap Live, watch console: expect no `onError`, PiP webcam visible immediately, main stage receiving remote track within ~2–3s and Lucy repaint visible after typing a prompt + Apply.
-- If Lucy still doesn't produce a remote track, capture the exact `onResult` payloads (log them) so we can confirm the signaling field names the bridge actually uses for this endpoint — that log is the only reliable oracle since the endpoint schema is empty in docs.
+<presentation-actions>
+  <presentation-open-history>View History</presentation-open-history>
+</presentation-actions>
 
-## Out of scope
-- MediaPipe WASM `memory access out of bounds` warnings (separate issue with 0-dim video frames on first ticks; can be addressed in a follow-up by pausing inference until `videoWidth > 0` for 2 consecutive frames).
-- Landing hero, gestures, presets, remote control — untouched.
-
-## Files changed
-- `src/lib/fal-token.functions.ts` (return type: string)
-- `src/lib/zap/fal-transport.ts` (rewrite: SDK-driven WebRTC, drop frame push)
-- `src/routes/index.tsx` (drop frame-mode UI bits; small)
+<presentation-actions>
+<presentation-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</presentation-link>
+</presentation-actions>
