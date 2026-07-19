@@ -231,24 +231,39 @@ export default function DesktopStage(p: StageViewProps) {
               }>●</span>{" "}
               {p.activeSource}
             </div>
-            <button
-              onClick={p.toggleDepth}
-              disabled={!p.depthAvailable || p.depthLoading}
-              title={p.depthAvailable ? "Toggle WebGPU depth stream to Lucy" : "WebGPU required — open in Chrome/Edge desktop"}
-              className={`absolute right-2 top-2 z-30 rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] backdrop-blur-xl transition disabled:opacity-40 ${
-                p.depthOn
-                  ? "border-cyan-300/60 bg-cyan-400/25 text-cyan-100"
-                  : "border-white/15 bg-black/60 text-white/70 hover:bg-white/10"
-              }`}
-            >
-              {p.depthLoading
-                ? `Depth ${p.depthProgress}%`
-                : p.depthOn
-                  ? "Depth · on"
-                  : p.depthAvailable
-                    ? "Depth"
-                    : "Depth · n/a"}
-            </button>
+            <div className="absolute right-2 top-2 z-30 flex gap-1.5">
+              {p.landmarksAvailable && !p.depthOn && (
+                <button
+                  onClick={p.toggleBakeLandmarks}
+                  title="Bake MediaPipe landmarks into the Lucy feed (softens quality)"
+                  className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] backdrop-blur-xl transition ${
+                    p.bakeLandmarks
+                      ? "border-fuchsia-300/60 bg-fuchsia-400/25 text-fuchsia-100"
+                      : "border-white/15 bg-black/60 text-white/70 hover:bg-white/10"
+                  }`}
+                >
+                  {p.bakeLandmarks ? "Landmarks · on" : "Landmarks"}
+                </button>
+              )}
+              <button
+                onClick={p.toggleDepth}
+                disabled={!p.depthAvailable || p.depthLoading}
+                title={p.depthAvailable ? "Toggle WebGPU depth stream to Lucy" : "WebGPU required — open in Chrome/Edge desktop"}
+                className={`rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] backdrop-blur-xl transition disabled:opacity-40 ${
+                  p.depthOn
+                    ? "border-cyan-300/60 bg-cyan-400/25 text-cyan-100"
+                    : "border-white/15 bg-black/60 text-white/70 hover:bg-white/10"
+                }`}
+              >
+                {p.depthLoading
+                  ? `Depth ${p.depthProgress}%`
+                  : p.depthOn
+                    ? "Depth · on"
+                    : p.depthAvailable
+                      ? "Depth"
+                      : "Depth · n/a"}
+              </button>
+            </div>
             {!p.facePresent && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-[11px] text-amber-300">
                 Step into frame
