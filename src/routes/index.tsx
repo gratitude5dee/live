@@ -339,10 +339,7 @@ function StagePage() {
         audio: false,
       });
       inputStreamRef.current = stream;
-      if (inputVideoRef.current) {
-        inputVideoRef.current.srcObject = stream;
-        inputVideoRef.current.play().catch(() => {});
-      }
+      setInputStream(stream);
       setConnState("camera_ready");
 
       // Create session row
