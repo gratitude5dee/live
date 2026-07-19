@@ -235,7 +235,7 @@ export default function DesktopStage(p: StageViewProps) {
               onClick={p.toggleDepth}
               disabled={!p.depthAvailable || p.depthLoading}
               title={p.depthAvailable ? "Toggle WebGPU depth stream to Lucy" : "WebGPU required — open in Chrome/Edge desktop"}
-              className={`absolute right-2 top-2 rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] backdrop-blur-xl transition disabled:opacity-40 ${
+              className={`absolute right-2 top-2 z-30 rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] backdrop-blur-xl transition disabled:opacity-40 ${
                 p.depthOn
                   ? "border-cyan-300/60 bg-cyan-400/25 text-cyan-100"
                   : "border-white/15 bg-black/60 text-white/70 hover:bg-white/10"
