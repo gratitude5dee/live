@@ -112,14 +112,35 @@ export default function DesktopStage(p: StageViewProps) {
               {p.recording ? "■ Stop" : "⬤ Record"}
             </SpecularButton>
           )}
-          {p.download && (
-            <a
-              href={p.download.url}
-              download={p.download.filename}
-              className="rounded-full border border-emerald-400/40 bg-emerald-400/20 px-4 py-1.5 text-xs font-medium text-emerald-100 backdrop-blur-xl transition hover:bg-emerald-400/30"
+          {p.voiceAvailable && (
+            <button
+              onClick={p.toggleVoice}
+              title={
+                p.voiceState === "off"
+                  ? 'Computah voice — say "Computah" then your edit'
+                  : "Turn off Computah"
+              }
+              className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-medium backdrop-blur-xl transition ${
+                p.voiceState === "armed"
+                  ? "border-emerald-300/50 bg-emerald-400/20 text-emerald-100 hover:bg-emerald-400/30"
+                  : p.voiceState === "connecting"
+                    ? "border-amber-300/40 bg-amber-300/20 text-amber-100"
+                    : p.voiceState === "thinking"
+                      ? "border-cyan-300/50 bg-cyan-400/20 text-cyan-100"
+                      : p.voiceState === "error"
+                        ? "border-red-400/50 bg-red-400/20 text-red-100"
+                        : "border-white/10 bg-black/50 text-white/70 hover:bg-white/10"
+              }`}
             >
-              ⬇ Download take
-            </a>
+              <span
+                className={
+                  p.voiceState === "armed" || p.voiceState === "thinking" || p.voiceState === "connecting"
+                    ? "inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-current"
+                    : "inline-block h-1.5 w-1.5 rounded-full bg-current opacity-40"
+                }
+              />
+              🎙 Computah
+            </button>
           )}
           <button
             onClick={() => p.stopSession("manual")}
@@ -135,6 +156,37 @@ export default function DesktopStage(p: StageViewProps) {
           {p.error}
         </div>
       )}
+
+      {p.voiceState !== "off" && (
+        <div className="pointer-events-none fixed left-1/2 top-20 z-20 flex -translate-x-1/2 flex-col items-center gap-1">
+          <div className="flex items-center gap-2 rounded-full border border-white/10 bg-black/70 px-3 py-1.5 text-[11px] uppercase tracking-widest text-white/80 backdrop-blur-xl">
+            <span
+              className={`inline-block h-1.5 w-1.5 rounded-full ${
+                p.voiceState === "armed"
+                  ? "animate-pulse bg-emerald-300"
+                  : p.voiceState === "thinking"
+                    ? "animate-pulse bg-cyan-300"
+                    : p.voiceState === "connecting"
+                      ? "animate-pulse bg-amber-300"
+                      : "bg-red-400"
+              }`}
+            />
+            <span>Computah · {p.voiceState}</span>
+            {p.voiceAck && <span className="text-emerald-200">"{p.voiceAck}"</span>}
+            {p.voiceIntentLabel && (
+              <span className="rounded-full bg-cyan-400/15 px-2 py-0.5 text-cyan-200">
+                {p.voiceIntentLabel}
+              </span>
+            )}
+          </div>
+          {p.voiceTranscript && (
+            <div className="max-w-[60ch] truncate rounded-full border border-white/10 bg-black/60 px-3 py-1 text-[11px] text-white/70 backdrop-blur-xl">
+              "{p.voiceTranscript}"
+            </div>
+          )}
+        </div>
+      )}
+
 
       {/* Left rail: presets */}
       <aside className="fixed left-6 top-24 bottom-32 z-20 flex w-[240px] flex-col rounded-[2rem] border border-white/10 bg-black/50 p-1.5 backdrop-blur-2xl">
