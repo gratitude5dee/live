@@ -7,7 +7,7 @@ import { VideoTransport } from "@/lib/zap/fal-transport";
 import { GestureEngine, type GestureAction } from "@/lib/zap/gesture-engine";
 import { FaceEngine, type FaceAction } from "@/lib/zap/face-engine";
 import { VisionBuffer } from "@/lib/zap/vision-buffer";
-import { drawHandOverlay } from "@/lib/zap/overlay";
+import { drawHandOverlay, drawFaceOverlay } from "@/lib/zap/overlay";
 import { loadGestureRecognizer, loadFaceLandmarker } from "@/lib/zap/mediapipe";
 import LandingHero from "@/components/zap/LandingHero";
 import SpecularButton from "@/components/reactbits/SpecularButton";
