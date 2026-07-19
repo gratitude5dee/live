@@ -878,7 +878,7 @@ function StagePage() {
           <div className="relative aspect-video overflow-hidden rounded-2xl border border-[#2A2A35] bg-black">
 
             <video
-              ref={outputVideoRef}
+              ref={attachOutputVideo}
               className="h-full w-full object-cover"
               autoPlay
               playsInline
@@ -899,7 +899,7 @@ function StagePage() {
               className={`absolute right-3 top-3 h-36 w-64 overflow-hidden rounded-lg border border-[#2A2A35] bg-black shadow-lg transition-opacity ${hudVisible ? "opacity-100" : "pointer-events-none opacity-0"}`}
             >
               <video
-                ref={inputVideoRef}
+                ref={attachInputVideo}
                 className="h-full w-full -scale-x-100 object-cover"
                 autoPlay
                 playsInline
