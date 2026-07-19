@@ -263,6 +263,7 @@ void main() {
     ctn.appendChild(gl.canvas);
 
     function resize() {
+      if (!ctn) return;
       const width = ctn.offsetWidth;
       const height = ctn.offsetHeight;
       renderer.setSize(width, height);

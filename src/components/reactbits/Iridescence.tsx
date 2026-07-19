@@ -38,12 +38,12 @@ void main() {
 }
 `;
 
-interface IridescenceProps extends HTMLAttributes<HTMLDivElement> {
+type IridescenceProps = Omit<HTMLAttributes<HTMLDivElement>, "color"> & {
   color?: [number, number, number];
   speed?: number;
   amplitude?: number;
   mouseReact?: boolean;
-}
+};
 
 export default function Iridescence({
   color = [1, 1, 1],
