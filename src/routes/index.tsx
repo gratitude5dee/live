@@ -368,21 +368,25 @@ function StagePage() {
       // Free-text / gesture / face / remote prompts should not bake MediaPipe
       // into Lucy's input — only preset apply paths can opt into that.
       if (source !== "preset") activePresetKindRef.current = "other";
-      syncOutboundSource();
       const next: PromptState = {
         text,
         refImage: ref?.dataUri,
         refPath: ref?.path,
       };
-      setPrevApplied(applied);
-      setApplied(next);
+      // Fire Lucy FIRST (synchronous WS send), then update React state and
+      // log — every ms we save here is a ms sooner Lucy starts repainting.
+      // Voice commands already come pre-templated by Computah, so skip the
+      // server-side prompt expansion (saves ~200-400ms per voice edit).
       transportRef.current.send({
         prompt: text,
-        enable_prompt_expansion: enhance,
+        enable_prompt_expansion: source === "voice" ? false : enhance,
         reference_image_url: next.refImage,
       });
+      syncOutboundSource();
+      setPrevApplied(applied);
+      setApplied(next);
       const kind = source === "preset" ? "preset" : "apply";
-      await logPromptEvent(kind, source, next);
+      void logPromptEvent(kind, source, next);
     },
     [applied, enhance, logPromptEvent, syncOutboundSource],
   );
