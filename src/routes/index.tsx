@@ -71,6 +71,9 @@ function StagePage() {
   const [facePresent, setFacePresent] = useState(true);
   const [perfMode, setPerfMode] = useState(false);
   const [pendingUpload, setPendingUpload] = useState(0);
+  const [remainingMs, setRemainingMs] = useState<number | null>(null);
+
+
 
   const inputVideoRef = useRef<HTMLVideoElement>(null);
   const outputVideoRef = useRef<HTMLVideoElement>(null);
@@ -102,6 +105,10 @@ function StagePage() {
   const transportStateRef = useRef<"webrtc" | null>(null);
   const perfModeRef = useRef(false);
   const pendingUploadRef = useRef(0);
+  const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoStopScheduledRef = useRef(false);
+
 
   // --- Anonymous auth on mount ---
   useEffect(() => {
@@ -332,8 +339,95 @@ function StagePage() {
     [prompt, applyPrompt, undo, clearPrompt, presets, refImage, applyPreset],
   );
 
+  // --- Teardown current session (manual disconnect or auto-timeout) ---
+  const stopSession = useCallback(async (reason?: "manual" | "timeout") => {
+    if (autoStopTimerRef.current) {
+      clearTimeout(autoStopTimerRef.current);
+      autoStopTimerRef.current = null;
+    }
+    if (countdownIntervalRef.current) {
+      clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    autoStopScheduledRef.current = false;
+    setRemainingMs(null);
+
+    if (heartbeatRef.current) {
+      clearInterval(heartbeatRef.current);
+      heartbeatRef.current = null;
+    }
+    if (revertTimerRef.current) {
+      clearTimeout(revertTimerRef.current);
+      revertTimerRef.current = null;
+    }
+    if (inferenceFrameRef.current !== null) {
+      cancelAnimationFrame(inferenceFrameRef.current);
+      inferenceFrameRef.current = null;
+    }
+    if (recorderRef.current?.state === "recording") {
+      try {
+        recorderRef.current.stop();
+      } catch {
+        // ignore
+      }
+    }
+    try {
+      transportRef.current?.close();
+    } catch {
+      // ignore
+    }
+    transportRef.current = null;
+    try {
+      gestureRef.current?.close();
+    } catch {
+      // ignore
+    }
+    gestureRef.current = null;
+    try {
+      faceRef.current?.close();
+    } catch {
+      // ignore
+    }
+    faceRef.current = null;
+    visionBufRef.current?.stop();
+    visionBufRef.current = null;
+    inputStreamRef.current?.getTracks().forEach((t) => t.stop());
+    inputStreamRef.current = null;
+    outputStreamRef.current = null;
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+    const sid = sessionIdRef.current;
+    if (sid) {
+      await supabase
+        .from("sessions")
+        .update({
+          ended_at: new Date().toISOString(),
+          stats: {
+            transport: transportStateRef.current,
+            perf_mode: perfModeRef.current,
+            ended_reason: reason ?? "manual",
+          },
+        })
+        .eq("id", sid);
+    }
+    sessionIdRef.current = null;
+    setSessionId(null);
+    setTransport(null);
+    transportStateRef.current = null;
+    setApplied(null);
+    setPrevApplied(null);
+    setLiveGesture({ label: null, score: 0, hold: 0 });
+    setConnState("idle");
+    if (reason === "timeout") {
+      toast("Session ended after 90s");
+    }
+  }, []);
+
   // --- Start camera + session + fal + realtime channel ---
   const startSession = useCallback(async () => {
+
     setConnState("requesting_camera");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -428,7 +522,25 @@ function StagePage() {
             outputVideoRef.current.play().catch(() => {});
           }
           setConnState("live");
+          if (!autoStopScheduledRef.current) {
+            autoStopScheduledRef.current = true;
+            const AUTO_STOP_MS = 90_000;
+            const deadline = Date.now() + AUTO_STOP_MS;
+            setRemainingMs(AUTO_STOP_MS);
+            countdownIntervalRef.current = setInterval(() => {
+              const left = Math.max(0, deadline - Date.now());
+              setRemainingMs(left);
+              if (left <= 0 && countdownIntervalRef.current) {
+                clearInterval(countdownIntervalRef.current);
+                countdownIntervalRef.current = null;
+              }
+            }, 250);
+            autoStopTimerRef.current = setTimeout(() => {
+              void stopSession("timeout");
+            }, AUTO_STOP_MS);
+          }
         },
+
         onTransportChosen: (mode) => {
           transportStateRef.current = mode;
           setTransport(mode);
@@ -467,7 +579,7 @@ function StagePage() {
       setError(String((e as Error)?.message ?? e));
       setConnState("failed");
     }
-  }, [applyPrompt, applyPreset, clearPrompt, handleGesture, presets, undo]);
+  }, [applyPrompt, applyPreset, clearPrompt, handleGesture, presets, undo, stopSession]);
 
   // --- MediaPipe inference loop (single rAF, both engines, adaptive rate) ---
   const runInferenceLoop = useCallback(() => {
@@ -716,8 +828,11 @@ function StagePage() {
       window.removeEventListener("beforeunload", beforeUnload);
       document.removeEventListener("visibilitychange", onVisibility);
       if (hideTimer) clearTimeout(hideTimer);
+      if (autoStopTimerRef.current) clearTimeout(autoStopTimerRef.current);
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current);
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       if (revertTimerRef.current) clearTimeout(revertTimerRef.current);
+
       if (inferenceFrameRef.current !== null) {
         cancelAnimationFrame(inferenceFrameRef.current);
         inferenceFrameRef.current = null;
@@ -897,7 +1012,21 @@ function StagePage() {
               {recording ? "■ Stop" : "⬤ Record"}
             </SpecularButton>
           )}
+          {remainingMs !== null && (
+            <span className="rounded-full border border-[#2A2A35] bg-[#16161D] px-2.5 py-1 font-mono text-xs tabular-nums text-[#9CA3AF]">
+              {Math.floor(remainingMs / 1000 / 60)}:
+              {String(Math.floor((remainingMs / 1000) % 60)).padStart(2, "0")}
+            </span>
+          )}
+          <button
+            onClick={() => void stopSession("manual")}
+            className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-xs font-medium text-red-300 transition hover:bg-red-500/20"
+          >
+            Disconnect
+          </button>
+
         </div>
+
       </header>
 
       {error && (
