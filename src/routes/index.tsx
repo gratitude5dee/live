@@ -99,6 +99,8 @@ function StagePage() {
   const lastGestureResultRef = useRef<GestureRecognizerResult | null>(null);
   const lastHoldRef = useRef<number>(0);
   const inferenceFrameRef = useRef<number | null>(null);
+  const transportStateRef = useRef<"webrtc" | null>(null);
+  const perfModeRef = useRef(false);
 
   // --- Anonymous auth on mount ---
   useEffect(() => {
@@ -487,6 +489,7 @@ function StagePage() {
         slowStreak++;
         if (slowStreak > 60 && everyN === 2) {
           everyN = 3;
+          perfModeRef.current = true;
           setPerfMode(true);
         }
       } else if (slowStreak > 0) {
@@ -521,7 +524,9 @@ function StagePage() {
           if (message.includes("memory access out of bounds")) fatal = true;
         }
 
-        // Paint hand overlay onto PiP overlay canvas
+        // Paint the camera into canvas as a compositing-safe PiP, then overlay
+        // the hand visualization. Some browsers render live video as a black
+        // hardware layer even while canvas/MediaPipe can read its frames.
         const oc = overlayRef.current;
         if (oc) {
           const v = inputVideoRef.current;
@@ -530,7 +535,13 @@ function StagePage() {
           if (oc.width !== w) oc.width = w;
           if (oc.height !== h) oc.height = h;
           const ctx = oc.getContext("2d");
-          if (ctx) drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
+          if (ctx) {
+            ctx.save();
+            ctx.clearRect(0, 0, w, h);
+            ctx.drawImage(v, 0, 0, w, h);
+            ctx.restore();
+            drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
+          }
         }
       }
       inferenceFrameRef.current = requestAnimationFrame(loop);
@@ -666,7 +677,7 @@ function StagePage() {
           ended_at: new Date().toISOString(),
           stats: {
             transport,
-            perf_mode: perfMode,
+            perf_mode: perfModeRef.current,
           },
         })
         .eq("id", sessionIdRef.current);
@@ -714,7 +725,7 @@ function StagePage() {
       endSession();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingUpload, transport, perfMode]);
+  }, [pendingUpload]);
 
   // --- Keyboard shortcuts ---
   useEffect(() => {

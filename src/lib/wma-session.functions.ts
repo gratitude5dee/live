@@ -21,9 +21,20 @@ export const createLucySession = createServerFn({ method: "POST" })
     }
     return data;
   })
-  .handler(async ({ data }) => {
+  .handler(async ({ data, context }) => {
     const key = process.env.FAL_KEY;
     if (!key) throw new Error("FAL_KEY not configured");
+
+    const oneMinuteAgo = new Date(Date.now() - 60_000).toISOString();
+    const { count } = await context.supabase
+      .from("token_mints")
+      .select("*", { count: "exact", head: true })
+      .gte("minted_at", oneMinuteAgo);
+    if ((count ?? 0) >= 30) throw new Error("Too many Lucy sessions");
+    const { error: mintError } = await context.supabase
+      .from("token_mints")
+      .insert({ user_id: context.userId });
+    if (mintError) throw new Error("Could not authorize Lucy session");
 
     const response = await fetch(`${WMA_URL}/session`, {
       method: "POST",
