@@ -10,6 +10,7 @@ const REACTIVE_COOLDOWN_MS = 6000;
 
 export class FaceEngine {
   enabled = false;
+  lastResult: FaceLandmarkerResult | null = null;
   private triggers: Trigger[] = [
     { label: "jawOpen", threshold: 0.6, sinceMs: null, action: "confetti" },
     { label: "browInnerUp", threshold: 0.5, sinceMs: null, action: "sparkle" },
@@ -22,6 +23,7 @@ export class FaceEngine {
   onFacePresence: ((present: boolean) => void) | null = null;
 
   ingest(result: FaceLandmarkerResult) {
+    this.lastResult = result;
     const now = performance.now();
     const hasFace = (result.faceLandmarks?.length ?? 0) > 0;
 

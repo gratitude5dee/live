@@ -1,45 +1,37 @@
-## Diagnosis
+# Fix: Lucy stuck on "Connecting…" + no face overlay in PiP
 
-**Do I know what the issue is? Yes.** The camera is producing frames—MediaPipe detects the hand—so camera permission and `getUserMedia()` are working. The failure is in transport and rendering:
+## Root causes (verified against fal docs + current code)
 
-- The installed `@fal-ai/client` realtime client is WebSocket-only; its source contains no `RTCPeerConnection` or `MediaStream` handling.
-- `fal-transport.ts` currently invents `offer`, `answer`, and ICE-candidate messages over that WebSocket. Lucy never returns the expected SDP answer, so no remote track is created and the main stage remains black.
-- The header marks transport as WebRTC before a peer connection is established, masking the failure.
-- Gesture and face inference run back-to-back against separate MediaPipe WASM tasks; current logs confirm repeated `memory access out of bounds` crashes.
+**1. WebRTC never establishes** — `src/lib/zap/fal-transport.ts` handles inbound signaling (iceServers / sdp answer / remote candidates) but never forwards the browser's **local ICE candidates** to fal. Lucy is a signaling relay ("media flows peer-to-peer") so without trickled local candidates the peer connection never gathers a working path and stays in `checking` forever — matching the "Connecting to Lucy…" screen the user sees.
 
-## Fix plan
+Confirmed from fal docs (`decart/lucy-2-5/realtime`): output schema is `{ iceServers, type, sdp, candidate, error }` and the model description is "Signaling relay only; media flows peer-to-peer between the browser and Decart." So the current design (WS signaling → WebRTC PC) is right, it's just missing the outbound-candidate half.
 
-1. **Replace the guessed signaling implementation**
-   - Use fal’s documented WMA WebRTC flow: create the peer connection, attach the webcam, wait for complete ICE gathering, send the SDP offer to `https://wma.fal.run/session`, and apply the returned SDP answer.
-   - Proxy session creation and heartbeat through authenticated TanStack server functions so `FAL_KEY` never reaches the browser.
-   - Do not use trickle ICE because the documented WMA bridge does not support it.
+**2. Face overlay never draws face landmarks** — `src/lib/zap/overlay.ts` `drawHandOverlay` only paints hand skeletons. Face inference runs (`FaceEngine.ingest`) but the result is discarded and nothing is rendered in the PiP. There is no face-drawing path at all.
 
-2. **Make connection state truthful**
-   - Report `connecting` while negotiating.
-   - Switch to `live · webrtc` only after a remote video track arrives and the peer connection reaches `connected`.
-   - Surface signaling, ICE, timeout, and remote-track failures in the existing error strip instead of leaving a black stage.
-   - Keep the local camera PiP visible independently of Lucy, so transport failure cannot hide a working webcam.
+## Changes
 
-3. **Wire realtime controls to the WebRTC session**
-   - Capture the session’s control data channel and send Lucy prompt/reference updates through it using the endpoint’s prompt payload.
-   - Queue the latest prompt until the channel opens, then flush it.
-   - Add heartbeat and deterministic cleanup for the WMA session, peer connection, data channel, and camera tracks.
+### `src/lib/zap/fal-transport.ts`
+- Add `pc.onicecandidate = (ev) => { if (ev.candidate) connection.send({ candidate: ev.candidate.toJSON() }) }` so local candidates trickle to Lucy.
+- Send a final `{ candidate: null }` on end-of-candidates (some relays require it).
+- Move `pc` construction to happen *after* iceServers arrive (already the case) — but also handle the case where fal sends `sdp` before `iceServers` by lazily creating pc with STUN fallback.
+- Also handle `pc.oniceconnectionstatechange` and surface `disconnected` / `failed` to `onError` with a clearer message.
+- Bump connect timeout from 15s to 20s for slow TURN negotiation.
 
-4. **Stabilize MediaPipe**
-   - Alternate gesture and face inference rather than invoking both WASM tasks in the same animation frame.
-   - Enforce one inference at a time, strictly increasing integer timestamps, and stop the loop after a fatal WASM error instead of flooding the console.
-   - Preserve the existing gesture/face behavior and adaptive performance mode.
+### `src/lib/zap/overlay.ts`
+- Add `drawFaceOverlay(ctx, faceResult)` that draws face landmark tesselation (light) + key contour lines (eyes, lips, oval) using `FaceLandmarker.FACE_LANDMARKS_TESSELATION` / `_LIPS` / `_LEFT_EYE` / `_RIGHT_EYE` / `_FACE_OVAL` connectors from `@mediapipe/tasks-vision`.
+- Keep the existing hand overlay untouched.
 
-5. **Verify the actual signals**
-   - Confirm the local PiP renders non-black camera pixels.
-   - Confirm the WMA session request returns an SDP answer, peer state reaches `connected`, and a remote track attaches before showing `live`.
-   - Confirm prompt changes are sent only after the control channel opens.
-   - Confirm the console no longer emits MediaPipe memory errors and that cleanup ends the session cleanly.
+### `src/lib/zap/face-engine.ts`
+- Store `lastResult: FaceLandmarkerResult | null` on the engine so the render loop can read it (mirrors how gesture already exposes results via `lastGestureResultRef`).
 
-<presentation-actions>
-  <presentation-open-history>View History</presentation-open-history>
-</presentation-actions>
+### `src/routes/index.tsx`
+- In the inference loop, capture the face result into a `lastFaceResultRef` on the frames it runs.
+- After `drawHandOverlay(...)`, call `drawFaceOverlay(ctx, lastFaceResultRef.current)` so both are visible in the PiP.
 
-<presentation-actions>
-<presentation-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</presentation-link>
-</presentation-actions>
+## Out of scope
+- No changes to auth, session, presets, upload, or landing UI.
+- No change to token minting (already fixed).
+- No new dependencies (`@mediapipe/tasks-vision` already exports the connector constants).
+
+## Verification
+After changes: refresh preview → click Zap Live → PiP should show face mesh landmarks within ~1s of camera start, and the main stage should transition from "Connecting to Lucy…" to a live Lucy-edited stream within ~5–10s. Check console for any signaling errors surfaced by the new `iceconnectionstatechange` handler.
