@@ -107,8 +107,8 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
           </div>
 
           <p className="relative z-10 mt-6 max-w-xl text-center text-base text-white/60 md:text-lg">
-            A realtime streaming video editor. Prompt, gesture, or reference —
-            Lucy 2.5 repaints every frame in under a second.
+            Create your reality in realtime with Zap! Built for streamers,
+            digital shop sellers, and wizards looking to bend their reality.
           </p>
 
           {/* Glass CTA */}
