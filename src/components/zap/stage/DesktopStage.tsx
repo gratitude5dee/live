@@ -381,35 +381,35 @@ function PresetRow({
     <button
       onClick={() => (isTemplate && templateKey ? onTemplate(templateKey, preset.name) : onApply())}
       disabled={disabled}
-      className={`group flex items-center gap-3 overflow-hidden rounded-2xl border p-1.5 text-left transition disabled:opacity-30 ${
+      className={`group flex h-11 w-full shrink-0 items-center gap-2.5 rounded-xl border pl-1 pr-2.5 text-left transition disabled:opacity-30 ${
         isTemplate
-          ? "border-dashed border-fuchsia-400/40 hover:border-fuchsia-400/80"
-          : "border-white/10 hover:border-cyan-300/50"
-      } hover:bg-white/[0.03]`}
-      title={`${preset.name}${index < 9 ? ` (${index + 1})` : ""}`}
+          ? "border-dashed border-fuchsia-400/40 hover:border-fuchsia-400/80 hover:bg-fuchsia-400/[0.04]"
+          : "border-white/10 hover:border-cyan-300/40 hover:bg-white/[0.04]"
+      }`}
+      title={`${preset.name}${index < 9 ? ` (⌘${index + 1})` : ""}`}
     >
       {preset.thumbnail_url ? (
-        <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl">
-          <img
-            src={preset.thumbnail_url}
-            alt=""
-            className="h-full w-full object-cover transition group-hover:scale-105"
-          />
-        </div>
+        <img
+          src={preset.thumbnail_url}
+          alt=""
+          className="h-9 w-9 shrink-0 rounded-lg object-cover"
+        />
       ) : (
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-white/[0.04] text-xl">
+        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/[0.05] text-base leading-none">
           {preset.emoji}
         </div>
       )}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs text-white/90 truncate">{preset.name}</span>
-          {isTemplate && <span className="text-[10px] text-fuchsia-300/80">📥</span>}
-        </div>
-        <div className="text-[10px] text-white/30">
-          {isTemplate ? "drop an image" : index < 9 ? `⌘${index + 1}` : preset.emoji}
-        </div>
-      </div>
+      <span className="min-w-0 flex-1 truncate text-[13px] leading-none text-white/85">
+        {preset.name}
+      </span>
+      <span
+        className={`shrink-0 text-[10px] tabular-nums ${
+          isTemplate ? "text-fuchsia-300/70" : "text-white/30"
+        }`}
+      >
+        {isTemplate ? "＋img" : index < 9 ? `⌘${index + 1}` : ""}
+      </span>
     </button>
   );
 }
+
