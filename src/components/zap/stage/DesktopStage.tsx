@@ -112,9 +112,9 @@ export default function DesktopStage(p: StageViewProps) {
       )}
 
       {/* Left rail: presets */}
-      <aside className="fixed left-6 top-24 bottom-32 z-20 flex w-[260px] flex-col rounded-[2rem] border border-white/10 bg-black/50 p-1.5 backdrop-blur-2xl">
-        <div className="flex min-h-0 flex-1 flex-col rounded-[calc(2rem-0.375rem)] bg-black/40 p-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]">
-          <div className="mb-3 flex items-center justify-between">
+      <aside className="fixed left-6 top-24 bottom-32 z-20 flex w-[240px] flex-col rounded-[2rem] border border-white/10 bg-black/50 p-1.5 backdrop-blur-2xl">
+        <div className="flex min-h-0 flex-1 flex-col rounded-[calc(2rem-0.375rem)] bg-black/40 p-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]">
+          <div className="mb-2 flex items-center justify-between px-1">
             <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
               Presets
             </span>
@@ -127,20 +127,53 @@ export default function DesktopStage(p: StageViewProps) {
               </button>
             )}
           </div>
-          <div className="-mr-2 flex flex-1 flex-col gap-2 overflow-y-auto pr-2">
-            {p.presets.map((preset, i) => (
-              <PresetRow
-                key={preset.id}
-                preset={preset}
-                index={i}
-                refImage={p.refImage}
-                onApply={() => p.applyPreset(preset)}
-                onTemplate={(k, n) => p.openTemplate(k, n)}
-              />
-            ))}
+          <div className="-mr-2 flex flex-1 flex-col gap-1 overflow-y-auto pr-2 pb-2">
+            {(() => {
+              const templates = p.presets.filter(
+                (x) => (x as unknown as { kind?: string }).kind === "template",
+              );
+              const others = p.presets.filter(
+                (x) => (x as unknown as { kind?: string }).kind !== "template",
+              );
+              return (
+                <>
+                  {templates.length > 0 && (
+                    <div className="mt-1 mb-1 px-1 text-[9px] uppercase tracking-[0.22em] text-fuchsia-300/50">
+                      Templates
+                    </div>
+                  )}
+                  {templates.map((preset, i) => (
+                    <PresetRow
+                      key={preset.id}
+                      preset={preset}
+                      index={p.presets.indexOf(preset)}
+                      refImage={p.refImage}
+                      onApply={() => p.applyPreset(preset)}
+                      onTemplate={(k, n) => p.openTemplate(k, n)}
+                    />
+                  ))}
+                  {templates.length > 0 && others.length > 0 && (
+                    <div className="mt-3 mb-1 px-1 text-[9px] uppercase tracking-[0.22em] text-white/30">
+                      Looks
+                    </div>
+                  )}
+                  {others.map((preset) => (
+                    <PresetRow
+                      key={preset.id}
+                      preset={preset}
+                      index={p.presets.indexOf(preset)}
+                      refImage={p.refImage}
+                      onApply={() => p.applyPreset(preset)}
+                      onTemplate={(k, n) => p.openTemplate(k, n)}
+                    />
+                  ))}
+                </>
+              );
+            })()}
           </div>
         </div>
       </aside>
+
 
       {/* Right HUD stack */}
       <aside className="fixed right-6 top-24 z-20 flex w-[300px] flex-col gap-3">
