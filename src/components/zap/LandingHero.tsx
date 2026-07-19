@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import LiquidEther from "@/components/reactbits/LiquidEther";
 import Strands from "@/components/reactbits/Strands";
 import GlassSurface from "@/components/reactbits/GlassSurface";
 import BubbleMenu from "@/components/reactbits/BubbleMenu";
 import ASCIIText from "@/components/reactbits/ASCIIText";
 import GhostCursor from "@/components/reactbits/GhostCursor";
+import ShinyText from "@/components/reactbits/ShinyText";
 import ChooseReality from "@/components/zap/ChooseReality";
 import ModesSection from "@/components/zap/ModesSection";
 import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
@@ -45,30 +47,42 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
     },
   ];
 
+  // Detect touch devices to disable the heavy ghost cursor trail on mobile
+  const [isTouch, setIsTouch] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(hover: none), (pointer: coarse)");
+    const update = () => setIsTouch(mq.matches);
+    update();
+    mq.addEventListener?.("change", update);
+    return () => mq.removeEventListener?.("change", update);
+  }, []);
+
   return (
     <div className="relative w-full bg-[#050505] text-[#FAFAFA]">
-      {/* Ghost cursor trail — full-viewport overlay */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-0"
-        style={{ zIndex: 40 }}
-      >
-        <GhostCursor
-          color="#B497CF"
-          brightness={1}
-          edgeIntensity={0}
-          trailLength={50}
-          inertia={0.5}
-          grainIntensity={0.05}
-          bloomStrength={0.1}
-          bloomRadius={1.0}
-          bloomThreshold={0.025}
-          fadeDelayMs={1000}
-          fadeDurationMs={1500}
-          mixBlendMode="screen"
-          zIndex={40}
-        />
-      </div>
+      {/* Ghost cursor trail — desktop only */}
+      {!isTouch && (
+        <div
+          aria-hidden
+          className="pointer-events-none fixed inset-0"
+          style={{ zIndex: 40 }}
+        >
+          <GhostCursor
+            color="#B497CF"
+            brightness={1}
+            edgeIntensity={0}
+            trailLength={50}
+            inertia={0.5}
+            grainIntensity={0.05}
+            bloomStrength={0.1}
+            bloomRadius={1.0}
+            bloomThreshold={0.025}
+            fadeDelayMs={1000}
+            fadeDurationMs={1500}
+            mixBlendMode="screen"
+            zIndex={40}
+          />
+        </div>
+      )}
       {/* Bubble menu — pinned top */}
       <BubbleMenu
         useFixedPosition
@@ -105,13 +119,13 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
           }}
         />
 
-        <div className="relative mx-auto flex min-h-[100dvh] max-w-6xl flex-col items-center justify-center px-6 py-24">
-          <span className="mb-8 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.28em] text-white/70 backdrop-blur">
-            ZAP · LIVE
+        <div className="relative mx-auto flex min-h-[100dvh] max-w-6xl flex-col items-center justify-center px-6 py-20 md:py-24">
+          <span className="mb-6 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.28em] backdrop-blur md:mb-8">
+            <ShinyText text="ZAP · LIVE" color="#8a8f98" shineColor="#ffffff" speed={5} spread={140} />
           </span>
 
           {/* Strands centerpiece */}
-          <div className="pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[820px] max-w-[95vw] -translate-x-1/2 -translate-y-[58%]">
+          <div className="pointer-events-none absolute left-1/2 top-1/2 h-[360px] w-[560px] max-w-[95vw] -translate-x-1/2 -translate-y-[58%] md:h-[520px] md:w-[820px]">
             <Strands
               colors={["#22d3ee", "#a855f7", "#f43f5e", "#eab308"]}
               count={5}
@@ -125,14 +139,18 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
 
           {/* Hero — ASCII wordmark */}
           <h1 className="sr-only">Zap Live — realtime video editor</h1>
-          <div className="relative z-10 h-[280px] w-full max-w-4xl md:h-[380px]">
+          <div className="relative z-10 h-[200px] w-full max-w-4xl sm:h-[260px] md:h-[380px]">
             <ASCIIText text="Zap!" enableWaves asciiFontSize={8} planeBaseHeight={8} />
           </div>
 
-          <p className="relative z-10 mt-6 max-w-xl text-center text-base whitespace-pre-line text-white/60 md:text-lg">
-            Create your reality in realtime with Zap!&nbsp;{"\n"}
-            Built for streamers, digital shop sellers, and wizards looking to&nbsp;{"\n"}
-            bend their reality.
+          <p className="relative z-10 mt-4 max-w-xl whitespace-pre-line px-2 text-center text-sm sm:text-base md:mt-6 md:text-lg">
+            <ShinyText
+              text={"Create your reality in realtime with Zap!\nBuilt for streamers, digital shop sellers, and wizards looking to\nbend their reality."}
+              color="#7c8291"
+              shineColor="#ffffff"
+              speed={6}
+              spread={150}
+            />
           </p>
 
           {/* Glass CTA */}
