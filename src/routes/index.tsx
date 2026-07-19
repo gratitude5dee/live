@@ -617,16 +617,15 @@ function StagePage() {
           const compositor = new CompositeStream(
             src,
             (ctx, _w, _h) => {
-              drawHandOverlay(
-                ctx,
-                lastGestureResultRef.current,
-                lastHoldRef.current,
-              );
+              // Send a clean, center-cropped 9:16 stream to Lucy. Only bake
+              // the face mesh when a character-swap preset actually needs it
+              // for identity re-projection. Hand/face overlays still render
+              // into the on-screen PiP canvas for user feedback.
               if (activePresetKindRef.current === "character_swap") {
                 drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
               }
             },
-            { fps: 30, targetAspect: 9 / 16, targetHeight: 1280 },
+            { fps: 30, targetAspect: 9 / 16, targetHeight: 1920 },
           );
           compositorRef.current = compositor;
           outboundStream = compositor.stream;
