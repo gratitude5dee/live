@@ -13,7 +13,7 @@ const PENDING_KEY = "zaplive.pendingPresetId";
 export default function ChooseReality({ onEnter, disabled }: ChooseRealityProps) {
   const [presets, setPresets] = useState<Preset[]>([]);
   const [idx, setIdx] = useState(0);
-  const wheelResetRef = useRef<((i: number) => void) | null>(null);
+  
 
   useEffect(() => {
     let cancelled = false;
