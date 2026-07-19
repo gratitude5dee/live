@@ -621,6 +621,24 @@ function StagePage() {
     appliedRef.current = applied;
   }, [applied]);
 
+  // Attach input MediaStream once the PiP <video> is mounted.
+  useEffect(() => {
+    const v = inputVideoRef.current;
+    if (v && inputStream && v.srcObject !== inputStream) {
+      v.srcObject = inputStream;
+      v.play().catch(() => {});
+    }
+  }, [inputStream]);
+
+  // Attach fal output MediaStream once the main <video> is mounted.
+  useEffect(() => {
+    const v = outputVideoRef.current;
+    if (v && outputStream && v.srcObject !== outputStream) {
+      v.srcObject = outputStream;
+      v.play().catch(() => {});
+    }
+  }, [outputStream]);
+
   // --- Cleanup, tab-hidden pause, un-uploaded warning ---
   useEffect(() => {
     const endSession = async () => {
