@@ -613,6 +613,9 @@ function StagePage() {
     depthEngineRef.current = null;
     depthOnRef.current = false;
     setDepthOn(false);
+    setDepthStream(null);
+    setActiveSource("raw");
+
     outputStreamRef.current = null;
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
