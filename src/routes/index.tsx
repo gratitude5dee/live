@@ -95,6 +95,9 @@ function StagePage() {
   const inputStreamRef = useRef<MediaStream | null>(null);
   const outputStreamRef = useRef<MediaStream | null>(null);
   const compositorRef = useRef<CompositeStream | null>(null);
+  // Only bake face landmarks into Lucy's input when the active preset is a
+  // character-swap style (face geometry helps re-identify the subject).
+  const activePresetKindRef = useRef<"character_swap" | "other">("other");
   const transportRef = useRef<VideoTransport | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -230,6 +233,7 @@ function StagePage() {
     if (!transportRef.current) return;
     setPrevApplied(applied);
     setApplied(null);
+    activePresetKindRef.current = "other";
     transportRef.current.send({ prompt: "", enable_prompt_expansion: false });
     await logPromptEvent("clear", "gesture", null);
   }, [applied, logPromptEvent]);
@@ -268,6 +272,8 @@ function StagePage() {
         return;
       }
       currentPresetIndex.current = presets.findIndex((p) => p.id === preset.id);
+      activePresetKindRef.current =
+        preset.template_key === "character_swap" ? "character_swap" : "other";
       await applyPrompt(preset.prompt, source, ref);
     },
     [applyPrompt, refImage, presets, loadPresetRef],
@@ -616,9 +622,11 @@ function StagePage() {
                 lastGestureResultRef.current,
                 lastHoldRef.current,
               );
-              drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+              if (activePresetKindRef.current === "character_swap") {
+                drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+              }
             },
-            30,
+            { fps: 30, targetAspect: 9 / 16, targetHeight: 1280 },
           );
           compositorRef.current = compositor;
           outboundStream = compositor.stream;

@@ -1,13 +1,11 @@
 /**
  * CompositeStream
  *
- * Draws a source <video> element onto an offscreen canvas each animation
- * frame, invoking a caller-supplied overlay callback after the video is
- * drawn (for MediaPipe landmarks etc.), then exposes the canvas as a live
- * MediaStream via captureStream().
- *
- * This lets us send Lucy the composited feed (webcam + overlays baked in)
- * instead of the raw camera track.
+ * Draws a source <video> element onto an offscreen portrait canvas each
+ * animation frame (center-cropped to a target aspect — default 9:16 to
+ * match Lucy + recording), invokes a caller-supplied overlay callback for
+ * MediaPipe landmarks etc., then exposes the canvas as a live MediaStream
+ * via captureStream().
  */
 
 export type CompositeDrawFn = (
@@ -15,6 +13,12 @@ export type CompositeDrawFn = (
   width: number,
   height: number,
 ) => void;
+
+export interface CompositeOptions {
+  fps?: number;
+  targetAspect?: number; // width / height, e.g. 9/16 = 0.5625
+  targetHeight?: number; // canvas height in px
+}
 
 export class CompositeStream {
   readonly canvas: HTMLCanvasElement;
@@ -28,18 +32,20 @@ export class CompositeStream {
   constructor(
     private source: HTMLVideoElement,
     private draw: CompositeDrawFn,
-    fps = 30,
+    opts: CompositeOptions = {},
   ) {
+    const fps = opts.fps ?? 30;
+    const targetAspect = opts.targetAspect ?? 9 / 16;
+    const h = opts.targetHeight ?? 1280;
+    const w = Math.round(h * targetAspect);
     this.frameInterval = 1000 / fps;
     this.canvas = document.createElement("canvas");
-    // Initial size — resynced on first frame from real videoWidth/Height.
-    this.canvas.width = 720;
-    this.canvas.height = 1280;
+    this.canvas.width = w;
+    this.canvas.height = h;
     const ctx = this.canvas.getContext("2d", { alpha: false });
     if (!ctx) throw new Error("CompositeStream: could not acquire 2D context");
     this.ctx = ctx;
 
-    // captureStream returns a MediaStream backed by canvas paints.
     const anyCanvas = this.canvas as HTMLCanvasElement & {
       captureStream?: (fps?: number) => MediaStream;
     };
@@ -56,13 +62,21 @@ export class CompositeStream {
     if (now - this.lastDraw >= this.frameInterval) {
       const v = this.source;
       if (v.readyState >= 2 && v.videoWidth > 0 && v.videoHeight > 0) {
-        const w = v.videoWidth;
-        const h = v.videoHeight;
-        if (this.canvas.width !== w) this.canvas.width = w;
-        if (this.canvas.height !== h) this.canvas.height = h;
+        const cw = this.canvas.width;
+        const ch = this.canvas.height;
+        const vw = v.videoWidth;
+        const vh = v.videoHeight;
+        // Center-crop (object-cover) so subject stays framed in portrait.
+        const scale = Math.max(cw / vw, ch / vh);
+        const dw = vw * scale;
+        const dh = vh * scale;
+        const dx = (cw - dw) / 2;
+        const dy = (ch - dh) / 2;
         try {
-          this.ctx.drawImage(v, 0, 0, w, h);
-          this.draw(this.ctx, w, h);
+          this.ctx.fillStyle = "#000";
+          this.ctx.fillRect(0, 0, cw, ch);
+          this.ctx.drawImage(v, dx, dy, dw, dh);
+          this.draw(this.ctx, cw, ch);
         } catch {
           // ignore transient draw errors (e.g. source not ready)
         }
