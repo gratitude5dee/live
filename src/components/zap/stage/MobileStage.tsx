@@ -143,25 +143,41 @@ export default function MobileStage(p: StageViewProps) {
           }>●</span>
           <span className="ml-1 text-white/70">{p.activeSource}</span>
         </div>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            p.toggleDepth();
-          }}
-          disabled={!p.depthAvailable || p.depthLoading}
-          title={p.depthAvailable ? "Toggle depth" : "WebGPU required — try Chrome/Edge desktop"}
-          className={`absolute right-1 top-1 z-30 rounded-full px-1.5 py-0.5 text-[8px] uppercase tracking-widest backdrop-blur-xl disabled:opacity-40 ${
-            p.depthOn ? "bg-cyan-400/30 text-cyan-100" : "bg-black/60 text-white/80"
-          }`}
-        >
-          {p.depthLoading
-            ? `${p.depthProgress}%`
-            : p.depthOn
-              ? "on"
-              : p.depthAvailable
-                ? "D"
-                : "n/a"}
-        </button>
+        <div className="absolute right-1 top-1 z-30 flex flex-col gap-1">
+          {p.landmarksAvailable && !p.depthOn && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                p.toggleBakeLandmarks();
+              }}
+              title="Bake landmarks into feed"
+              className={`rounded-full px-1.5 py-0.5 text-[8px] uppercase tracking-widest backdrop-blur-xl ${
+                p.bakeLandmarks ? "bg-fuchsia-400/30 text-fuchsia-100" : "bg-black/60 text-white/80"
+              }`}
+            >
+              {p.bakeLandmarks ? "L·on" : "L"}
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              p.toggleDepth();
+            }}
+            disabled={!p.depthAvailable || p.depthLoading}
+            title={p.depthAvailable ? "Toggle depth" : "WebGPU required — try Chrome/Edge desktop"}
+            className={`rounded-full px-1.5 py-0.5 text-[8px] uppercase tracking-widest backdrop-blur-xl disabled:opacity-40 ${
+              p.depthOn ? "bg-cyan-400/30 text-cyan-100" : "bg-black/60 text-white/80"
+            }`}
+          >
+            {p.depthLoading
+              ? `${p.depthProgress}%`
+              : p.depthOn
+                ? "on"
+                : p.depthAvailable
+                  ? "D"
+                  : "n/a"}
+          </button>
+        </div>
         {!p.facePresent && (
           <div className="absolute inset-x-0 bottom-0 bg-black/70 py-0.5 text-center text-[9px] text-amber-300">
             Step in
