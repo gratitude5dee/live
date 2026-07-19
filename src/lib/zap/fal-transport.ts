@@ -13,6 +13,11 @@ export type TransportSend = (payload: {
   reference_image_url?: string;
 }) => void;
 
+type LucyRealtimeConnection = {
+  send: (payload: Record<string, unknown>) => void;
+  close: () => void;
+};
+
 /**
  * Video transport for Lucy 2.5 realtime.
  *
@@ -23,7 +28,7 @@ export class VideoTransport {
   private inputStream: MediaStream;
   private cb: TransportCallbacks;
   private pc: RTCPeerConnection | null = null;
-  private connection: ReturnType<typeof fal.realtime.connect> | null = null;
+  private connection: LucyRealtimeConnection | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
   private outboundPaused = false;
@@ -113,7 +118,7 @@ export class VideoTransport {
         },
         onError: (error) => this.cb.onError(error),
       });
-      this.connection = connection;
+      this.connection = connection as LucyRealtimeConnection;
 
       const offer = await pc.createOffer({
         offerToReceiveVideo: true,
@@ -121,7 +126,7 @@ export class VideoTransport {
       });
       await pc.setLocalDescription(offer);
 
-      // WMA does not support trickle ICE: the offer must contain candidates.
+      // Send a complete offer so Lucy can establish media without trickle ICE.
       await new Promise<void>((resolve, reject) => {
         if (pc.iceGatheringState === "complete") return resolve();
         const timeout = setTimeout(
@@ -138,7 +143,7 @@ export class VideoTransport {
 
       const sdp = pc.localDescription?.sdp;
       if (!sdp) throw new Error("WebRTC offer was empty");
-      connection.send({ type: "offer", sdp });
+      (connection as LucyRealtimeConnection).send({ type: "offer", sdp });
       this.connectTimeout = setTimeout(() => {
         if (pc.connectionState !== "connected") {
           this.cb.onError(new Error("Lucy did not establish a media connection"));
