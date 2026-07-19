@@ -1,25 +1,106 @@
-## Add Prism-powered footer to homepage
+## Goal
+Replace the current one-size Stage (`src/routes/index.tsx`) with two purpose-built layouts: a **Desktop Cockpit** and a **Mobile Capture** view, sharing state + logic but rendering different shells.
 
-Build a cinematic site footer anchored by the React Bits `<Prism />` WebGL component, WZRD logo, footer nav, and legal row. Mount it at the bottom of the landing page.
+## Architecture
 
-### Files
+```text
+src/routes/index.tsx                → orchestrates session state, chooses shell
+src/hooks/useIsMobile.ts            → matchMedia (max-width: 767px) + touch check
+src/components/zap/stage/
+  ├─ StageProvider.tsx              → context: session, transport, refs, actions
+  ├─ DesktopStage.tsx               → 3-zone cockpit
+  ├─ MobileStage.tsx                → full-bleed capture
+  ├─ shared/
+  │   ├─ PresetTile.tsx             → thumbnail + badge, reused both views
+  │   ├─ PromptDock.tsx             → input + send + shortcuts
+  │   ├─ HudPiP.tsx                 → landmarks overlay canvas
+  │   ├─ CountdownPill.tsx          → 90s timer chip
+  │   ├─ QrPanel.tsx                → remote link QR
+  │   └─ DownloadTakeButton.tsx     → post-session CTA
+```
 
-1. **`bun add ogl`** — new dependency for the Prism shader.
-2. **`src/components/reactbits/Prism.tsx`** — port the provided JSX to TSX with typed props (`animationType: 'rotate' | 'hover' | '3drotate'`, optional `offset`, etc.). Same shader logic, same cleanup.
-3. **`src/components/reactbits/Prism.css`** — the provided `.prism-container` rule.
-4. **`src/components/zap/SiteFooter.tsx`** — new footer component:
-   - Full-bleed section, ~420px tall desktop / ~520px mobile, black background, `overflow-hidden`.
-   - Prism mounted absolutely behind content: `animationType="3drotate"`, `timeScale={0.4}`, `scale={3.2}`, `glow={1}`, `noise={0.35}`, `hueShift={-0.2}` (blue tint to match WZRD chrome), `suspendWhenOffscreen` on.
-   - Foreground grid (max-w container, backdrop blur pill sections):
-     - **Left**: WZRD chrome logo (reuse existing asset) + tagline "Bend your reality." wrapped in `ShinyText`.
-     - **Middle columns**: three link groups — **Product** (Stage, Presets `#choose-reality`, Modes `#modes`), **Company** (About, Contact `mailto:`, Twitter/X), **Legal** (Privacy, Terms). Anchor links for on-page sections, `<a>` for external, all styled with `ShinyText` on hover.
-     - **Right**: small "Powered by Lucy 2.5 · fal.ai" caption.
-   - Bottom row: `© 2026 WZRD.tech` + build tag, separated by a hairline top border (`border-white/10`).
-   - Mobile: stack columns vertically, keep Prism height compact, disable prism on `prefers-reduced-motion` (render static gradient fallback).
-5. **`src/routes/index.tsx`** — import and render `<SiteFooter />` at the bottom of the landing view (after `ModesSection`, only in the pre-session landing state so it doesn't clutter the live Stage). Add ids `choose-reality` and `modes` to those sections so footer anchors work.
+All session logic (fal transport, MediaPipe, recording, countdown, upload) moves into `StageProvider` unchanged in behavior — pure lift, no logic rewrite.
 
-### Notes
+## Desktop Cockpit (≥768px)
 
-- No backend/schema changes.
-- Uses existing `ShinyText`, WZRD logo asset, and design tokens; no hardcoded hex outside the Prism shader tuning props.
-- `suspendWhenOffscreen` avoids GPU cost when the footer is scrolled away, keeping the <100ms live-loop budget on the Stage.
+```text
+┌──────────────────────────────────────────────────────────────┐
+│  [WZRD BubbleMenu]                        [Countdown][Disc.] │
+├────────────┬─────────────────────────────┬───────────────────┤
+│            │                             │  HUD PANEL        │
+│  PRESET    │                             │  ┌─────────────┐  │
+│  RAIL      │      9:16 LIVE OUTPUT       │  │   PiP feed  │  │
+│  (scroll)  │      (centered, max h)      │  │   landmarks │  │
+│            │                             │  └─────────────┘  │
+│  ├ preset  │      double-bezel frame     │  ┌─────────────┐  │
+│  ├ preset  │                             │  │   QR remote │  │
+│  ├ tmpl 📥 │                             │  └─────────────┘  │
+│  ├ …       │                             │  gesture ticker   │
+│            │                             │  fps / status     │
+├────────────┴─────────────────────────────┴───────────────────┤
+│  ⌨ PROMPT DOCK  [ input… ]  [ send ]  ⌘Z undo  ⇧⌘R record  │
+└──────────────────────────────────────────────────────────────┘
+```
+
+- Left rail: vertical scroll list of presets + templates with thumbnails, hover shimmer (PixelCard-lite).
+- Center: 9:16 video in a Double-Bezel frame, PiP and QR removed from over the video.
+- Right HUD panel: PiP, QR, gesture/face event ticker, connection FPS, take countdown.
+- Bottom prompt dock: full-width glass bar, SpecularButton send, keyboard hint row.
+
+## Mobile Capture (<768px)
+
+```text
+┌──────────────────────┐
+│  ▪ WZRD    ⏱ 1:23 ⨯ │  ← floating chips on video
+│                      │
+│                      │
+│                      │
+│   FULL-BLEED 9:16    │
+│   LIVE OUTPUT        │
+│                      │
+│      ┌────┐          │
+│      │PiP │ ← tap to hide
+│      └────┘          │
+│                      │
+│                      │
+├──────────────────────┤
+│ ← preset preset · · →│  ← horizontal snap rail
+├──────────────────────┤
+│ [prompt…]      [Send]│  ← sticky glass dock
+└──────────────────────┘
+```
+
+- Full-bleed video (respects safe-area insets).
+- Floating minimal HUD chips: countdown, disconnect, flip-camera.
+- PiP as a small draggable/tappable thumbnail in a corner.
+- Horizontal preset rail with scroll-snap.
+- Sticky bottom prompt dock above keyboard.
+- Flip-camera button (front/back) using `getUserMedia({ facingMode })`.
+- QR moves into a `⋯` sheet (not needed on the phone itself).
+
+## Shared design tokens (added to `src/styles.css`)
+
+```css
+--stage-bg: oklch(0.09 0.02 260);
+--surface-1: oklch(0.14 0.02 260 / 0.6);
+--surface-2: oklch(0.18 0.03 260 / 0.7);
+--hairline: oklch(1 0 0 / 0.08);
+--stage-radius-outer: 2rem;
+--stage-radius-inner: calc(2rem - 0.375rem);
+--ease-cockpit: cubic-bezier(0.32, 0.72, 0, 1);
+```
+
+## Implementation steps
+
+1. Add `useIsMobile` hook + tokens.
+2. Extract all session logic from `src/routes/index.tsx` into `StageProvider` (no behavior change; verify via existing flow).
+3. Build shared subcomponents (`PresetTile`, `PromptDock`, `HudPiP`, `CountdownPill`, `QrPanel`, `DownloadTakeButton`).
+4. Build `DesktopStage` (3-zone grid, double-bezel video frame, right HUD panel).
+5. Build `MobileStage` (full-bleed video, floating chips, horizontal rail, sticky dock, flip camera).
+6. `src/routes/index.tsx` becomes: landing gate → `StageProvider` → `isMobile ? MobileStage : DesktopStage`.
+7. Verify: typecheck, load on desktop viewport (1280) and mobile viewport (390), confirm live session, recording, download, presets, template drop, disconnect all still work in both shells.
+
+## Non-goals (unchanged)
+
+- No changes to fal transport, MediaPipe engines, Supabase schema, presets/templates data, landing hero, ChooseReality, Modes, Footer.
+- No new features beyond the mobile **flip camera** control.
