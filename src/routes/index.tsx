@@ -1315,6 +1315,8 @@ function StagePage() {
     depthAvailable,
     depthProgress,
     toggleDepth,
+    depthStream,
+    activeSource,
   };
 
   return (
