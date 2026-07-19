@@ -498,7 +498,13 @@ function StagePage() {
     setConnState("requesting_camera");
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 720 }, height: { ideal: 1280 }, aspectRatio: { ideal: 9 / 16 }, frameRate: 30 },
+        video: {
+          width: { ideal: 720 },
+          height: { ideal: 1280 },
+          aspectRatio: { ideal: 9 / 16 },
+          frameRate: 30,
+          facingMode,
+        },
         audio: false,
       });
       inputStreamRef.current = stream;
