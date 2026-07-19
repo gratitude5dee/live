@@ -345,24 +345,46 @@ export default function DesktopStage(p: StageViewProps) {
               />
               ✨ Enhance
             </label>
-            <label className="cursor-pointer rounded-full border border-white/10 px-3 py-1.5 text-[11px] text-white/70 hover:bg-white/[0.06]">
-              🖼️ Ref
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (f) p.onRefUpload(f);
-                }}
-              />
-            </label>
-            {p.refImage && (
-              <img
-                src={p.refImage.dataUri}
-                alt=""
-                className="h-8 w-8 rounded-lg object-cover ring-1 ring-white/10"
-              />
+            <input
+              id="ref-file"
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) p.onRefUpload(f);
+                e.currentTarget.value = "";
+              }}
+            />
+            {p.refImage ? (
+              <div className="group relative">
+                <label
+                  htmlFor="ref-file"
+                  title="Click to replace reference image"
+                  className="block cursor-pointer overflow-hidden rounded-lg ring-1 ring-white/10 transition hover:ring-cyan-300/60"
+                >
+                  <img
+                    src={p.refImage.dataUri}
+                    alt="reference"
+                    className="h-8 w-8 object-cover"
+                  />
+                </label>
+                <button
+                  onClick={p.clearRefImage}
+                  title="Remove reference image"
+                  aria-label="Remove reference image"
+                  className="absolute -right-1.5 -top-1.5 grid h-4 w-4 place-items-center rounded-full border border-white/20 bg-black/80 text-[10px] leading-none text-white/80 shadow-md transition hover:bg-red-500/80 hover:text-white"
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <label
+                htmlFor="ref-file"
+                className="cursor-pointer rounded-full border border-white/10 px-3 py-1.5 text-[11px] text-white/70 hover:bg-white/[0.06]"
+              >
+                🖼️ Ref
+              </label>
             )}
             <button
               onClick={p.undo}
