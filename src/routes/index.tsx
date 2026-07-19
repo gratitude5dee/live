@@ -75,6 +75,10 @@ function StagePage() {
   const [pendingUpload, setPendingUpload] = useState(0);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
   const [download, setDownload] = useState<{ url: string; filename: string } | null>(null);
+  const [templateDialog, setTemplateDialog] = useState<{
+    key: TemplateKey;
+    name: string;
+  } | null>(null);
   const autoRecordRef = useRef(false);
   const startRecordingRef = useRef<((auto: boolean) => void) | null>(null);
 
