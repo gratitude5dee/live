@@ -47,6 +47,9 @@ export class DepthEngine {
   private stopped = false;
   private source: HTMLVideoElement | null = null;
   private opts: Required<DepthAttachOptions>;
+  private firstFrameResolve: (() => void) | null = null;
+  readonly firstFrame: Promise<void>;
+
 
   constructor(opts: DepthAttachOptions = {}) {
     this.opts = {
