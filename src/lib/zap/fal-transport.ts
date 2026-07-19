@@ -2,16 +2,11 @@ import { fal } from "@fal-ai/client";
 import { mintFalRealtimeToken } from "@/lib/fal-token.functions";
 import { LUCY_APP } from "./types";
 
-export type FalResult =
-  | { type: "iceServers"; iceServers: RTCIceServer[] }
-  | { type: "answer"; sdp: string }
-  | { type: "candidate"; candidate: RTCIceCandidateInit }
-  | { image: { url: string } | string }
-  | Record<string, unknown>;
+type FalPayload = Record<string, unknown>;
 
 type TransportCallbacks = {
   onOutputStream: (stream: MediaStream) => void;
-  onTransportChosen: (t: "webrtc" | "frame") => void;
+  onTransportChosen: (t: "webrtc") => void;
   onError: (e: unknown) => void;
 };
 
@@ -21,27 +16,30 @@ export type TransportSend = (payload: {
   prompt: string;
   enable_prompt_expansion?: boolean;
   reference_image_url?: string;
-  image_url?: string;
 }) => void;
 
+/**
+ * Video transport for Lucy 2.5 realtime.
+ *
+ * Lucy is a WebRTC video-to-video model. `fal.realtime.connect()` opens a
+ * WebSocket that carries WebRTC signaling; media flows peer-to-peer.
+ * `connection.send({ prompt })` only ships prompt updates over the signaling
+ * channel — the video is the webcam's `MediaStream`.
+ */
 export class VideoTransport {
   private inputStream: MediaStream;
   private cb: TransportCallbacks;
   private connection: FalConnection | null = null;
-
   private pc: RTCPeerConnection | null = null;
-  private mode: "webrtc" | "frame" | null = null;
-  private fallbackTimer: number | null = null;
-  private frameLoopHandle: number | null = null;
-  private lastPayload:
-    | { prompt: string; enable_prompt_expansion?: boolean; reference_image_url?: string }
-    | null = null;
-  private canvas: HTMLCanvasElement | null = null;
-  private outputCanvas: HTMLCanvasElement | null = null;
-  private outputImg: HTMLImageElement | null = null;
-  private outputStreamOut: MediaStream | null = null;
   private closed = false;
   private outboundPaused = false;
+  private lastPrompt: {
+    prompt: string;
+    enable_prompt_expansion?: boolean;
+    reference_image_url?: string;
+  } | null = null;
+  private negotiated = false;
+  private pendingLocalCandidates: RTCIceCandidateInit[] = [];
 
   constructor(inputStream: MediaStream, cb: TransportCallbacks) {
     this.inputStream = inputStream;
@@ -50,7 +48,6 @@ export class VideoTransport {
 
   setOutboundPaused(paused: boolean) {
     this.outboundPaused = paused;
-    // In WebRTC mode, we can additionally toggle sender enabled state
     if (this.pc) {
       for (const sender of this.pc.getSenders()) {
         if (sender.track) sender.track.enabled = !paused;
@@ -58,198 +55,155 @@ export class VideoTransport {
     }
   }
 
-  private rawSend(payload: Record<string, unknown>) {
-    (this.connection as unknown as { send?: (p: unknown) => void } | null)?.send?.(payload);
-  }
-
-
   async start() {
     this.connection = fal.realtime.connect(LUCY_APP, {
       throttleInterval: 0,
-      onResult: (result) => this.handleResult(result as FalResult),
+      onResult: (result) => this.handleResult(result as FalPayload),
       onError: (e) => this.cb.onError(e),
       tokenProvider: async () => {
-        const { token } = await mintFalRealtimeToken({ data: { app: LUCY_APP } });
-        return token;
+        return await mintFalRealtimeToken({ data: { app: LUCY_APP } });
       },
+      tokenExpirationSeconds: 60,
     } as Parameters<typeof fal.realtime.connect>[1]) as unknown as FalConnection;
 
-
-    // Give WebRTC 8s to produce a remote track, otherwise fall back.
-    this.fallbackTimer = window.setTimeout(() => {
-      if (this.mode !== "webrtc") this.switchToFrame();
-    }, 8000);
+    // Kick off WebRTC negotiation immediately with public STUN.
+    // The bridge may send back updated iceServers via onResult; we'll ignore
+    // for now since the default set works for browser origination.
+    await this.beginWebRTC([{ urls: "stun:stun.l.google.com:19302" }]);
+    this.cb.onTransportChosen("webrtc");
   }
 
   send: TransportSend = (payload) => {
-    this.lastPayload = {
-      prompt: payload.prompt,
-      enable_prompt_expansion: payload.enable_prompt_expansion,
-      reference_image_url: payload.reference_image_url,
-    };
+    this.lastPrompt = { ...payload };
     if (!this.connection) return;
-    if (this.mode === "frame") {
-      // frame mode also needs image_url; skip send here (frame loop attaches it)
-      return;
+    try {
+      this.connection.send({
+        prompt: payload.prompt,
+        enable_prompt_expansion: payload.enable_prompt_expansion ?? true,
+        ...(payload.reference_image_url
+          ? { reference_image_url: payload.reference_image_url }
+          : {}),
+      });
+    } catch (e) {
+      this.cb.onError(e);
     }
-    this.connection.send({
-      prompt: payload.prompt,
-      enable_prompt_expansion: payload.enable_prompt_expansion ?? true,
-      ...(payload.reference_image_url
-        ? { reference_image_url: payload.reference_image_url }
-        : {}),
-    });
   };
 
-  private async handleResult(result: FalResult) {
-    // Frame push mode: output image
-    const r = result as Record<string, unknown>;
-    if (r.image) {
-      const url =
-        typeof r.image === "string" ? r.image : (r.image as { url?: string }).url;
-      if (url && this.mode !== "webrtc") {
-        this.mode ??= "frame";
-        this.paintFrame(url);
+  private async handleResult(result: FalPayload) {
+    // Log unknown payloads to help refine the signaling shape at runtime.
+    if (!result || typeof result !== "object") return;
+
+    // Common signaling shapes we know how to react to
+    if (result.type === "answer" && typeof result.sdp === "string") {
+      try {
+        await this.pc?.setRemoteDescription({ type: "answer", sdp: result.sdp });
+        this.flushPendingCandidates();
+      } catch (e) {
+        this.cb.onError(e);
       }
       return;
     }
-
-    // WebRTC signaling
-    if (r.type === "iceServers" && Array.isArray(r.iceServers)) {
-      await this.beginWebRTC(r.iceServers as RTCIceServer[]);
-    } else if (r.type === "answer" && typeof r.sdp === "string") {
-      if (this.pc) {
-        await this.pc.setRemoteDescription({ type: "answer", sdp: r.sdp });
+    if (
+      result.type === "candidate" &&
+      result.candidate &&
+      typeof result.candidate === "object"
+    ) {
+      try {
+        await this.pc?.addIceCandidate(result.candidate as RTCIceCandidateInit);
+      } catch (e) {
+        console.warn("addIceCandidate failed", e);
       }
-    } else if (r.type === "candidate" && r.candidate) {
-      if (this.pc) {
-        await this.pc.addIceCandidate(r.candidate as RTCIceCandidateInit);
-      }
+      return;
     }
+    if (result.type === "iceServers" && Array.isArray(result.iceServers)) {
+      // Late iceServers — nothing to do post-offer; skip.
+      return;
+    }
+    // Debug: log any other payloads so we can iterate on unknown fields
+    console.debug("[lucy] onResult", result);
   }
 
   private async beginWebRTC(iceServers: RTCIceServer[]) {
     try {
       const pc = new RTCPeerConnection({ iceServers });
       this.pc = pc;
+
+      // Add local webcam tracks
       for (const track of this.inputStream.getVideoTracks()) {
         pc.addTrack(track, this.inputStream);
       }
+      // Also want to receive remote video
+      pc.addTransceiver("video", { direction: "sendrecv" });
+
       pc.ontrack = (ev) => {
         if (this.closed) return;
-        const [remote] = ev.streams;
-        if (remote) {
-          this.mode = "webrtc";
-          if (this.fallbackTimer) {
-            clearTimeout(this.fallbackTimer);
-            this.fallbackTimer = null;
-          }
-          this.cb.onTransportChosen("webrtc");
-          this.cb.onOutputStream(remote);
-        }
+        const remote = ev.streams[0] ?? new MediaStream([ev.track]);
+        this.cb.onOutputStream(remote);
       };
+
       pc.onicecandidate = (ev) => {
-        if (ev.candidate && this.connection) {
-          this.connection.send({
-            type: "candidate",
-            candidate: ev.candidate.toJSON(),
-          });
+        if (!ev.candidate) return;
+        const cand = ev.candidate.toJSON();
+        if (!this.negotiated) {
+          this.pendingLocalCandidates.push(cand);
+        } else {
+          this.connection?.send({ type: "candidate", candidate: cand });
         }
       };
-      const offer = await pc.createOffer();
+
+      const offer = await pc.createOffer({
+        offerToReceiveVideo: true,
+        offerToReceiveAudio: false,
+      });
       await pc.setLocalDescription(offer);
-      this.connection?.send({ type: "offer", sdp: offer.sdp });
+
+      // Wait briefly for ICE gathering to reduce trickle
+      await new Promise<void>((resolve) => {
+        if (pc.iceGatheringState === "complete") return resolve();
+        const timeout = setTimeout(resolve, 1500);
+        pc.onicegatheringstatechange = () => {
+          if (pc.iceGatheringState === "complete") {
+            clearTimeout(timeout);
+            resolve();
+          }
+        };
+      });
+
+      this.negotiated = true;
+      this.connection?.send({
+        type: "offer",
+        sdp: pc.localDescription?.sdp,
+      });
+      // Flush any candidates that gathered after "complete" fired
+      this.flushPendingCandidates();
     } catch (e) {
       this.cb.onError(e);
-      this.switchToFrame();
     }
   }
 
-  private switchToFrame() {
-    if (this.mode === "frame") return;
-    if (this.pc) {
-      try {
-        this.pc.close();
-      } catch {}
-      this.pc = null;
+  private flushPendingCandidates() {
+    if (!this.connection) return;
+    for (const cand of this.pendingLocalCandidates) {
+      this.connection.send({ type: "candidate", candidate: cand });
     }
-    this.mode = "frame";
-    this.cb.onTransportChosen("frame");
-    this.startFrameLoop();
-  }
-
-  private startFrameLoop() {
-    // Grabs a 1280x720 frame at ~12fps and sends it to fal.
-    const video = document.createElement("video");
-    video.srcObject = this.inputStream;
-    video.muted = true;
-    video.playsInline = true;
-    video.play().catch(() => {});
-    const canvas = document.createElement("canvas");
-    canvas.width = 1280;
-    canvas.height = 720;
-    this.canvas = canvas;
-    const ctx = canvas.getContext("2d")!;
-    let inFlight = false;
-    const tick = () => {
-      if (this.closed) return;
-      if (this.outboundPaused) return;
-      if (!inFlight && video.readyState >= 2 && this.lastPayload) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
-        inFlight = true;
-        try {
-          this.connection?.send({
-            prompt: this.lastPayload.prompt,
-            enable_prompt_expansion:
-              this.lastPayload.enable_prompt_expansion ?? true,
-            image_url: dataUrl,
-            ...(this.lastPayload.reference_image_url
-              ? { reference_image_url: this.lastPayload.reference_image_url }
-              : {}),
-          });
-        } catch (e) {
-          this.cb.onError(e);
-        }
-        // Reset in-flight quickly; fal streams results independently.
-        window.setTimeout(() => (inFlight = false), 80);
-      }
-    };
-    this.frameLoopHandle = window.setInterval(tick, 1000 / 12);
-
-    // Output canvas -> stream for recording
-    if (!this.outputCanvas) {
-      this.outputCanvas = document.createElement("canvas");
-      this.outputCanvas.width = 1280;
-      this.outputCanvas.height = 720;
-      const stream = this.outputCanvas.captureStream(30);
-      this.outputStreamOut = stream;
-      this.cb.onOutputStream(stream);
-    }
-  }
-
-  private paintFrame(url: string) {
-    if (!this.outputCanvas) return;
-    if (!this.outputImg) this.outputImg = new Image();
-    const img = this.outputImg;
-    const ctx = this.outputCanvas.getContext("2d")!;
-    img.onload = () => {
-      ctx.drawImage(img, 0, 0, this.outputCanvas!.width, this.outputCanvas!.height);
-    };
-    img.src = url;
+    this.pendingLocalCandidates = [];
   }
 
   close() {
     this.closed = true;
-    if (this.fallbackTimer) clearTimeout(this.fallbackTimer);
-    if (this.frameLoopHandle) clearInterval(this.frameLoopHandle);
     if (this.pc) {
       try {
         this.pc.close();
-      } catch {}
+      } catch {
+        // ignore
+      }
+      this.pc = null;
     }
     try {
       this.connection?.close();
-    } catch {}
+    } catch {
+      // ignore
+    }
+    this.connection = null;
   }
 }

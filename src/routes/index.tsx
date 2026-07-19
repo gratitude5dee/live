@@ -49,7 +49,7 @@ function StagePage() {
   const [authReady, setAuthReady] = useState(false);
   const [connState, setConnState] = useState<ConnectionState>("idle");
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [transport, setTransport] = useState<"webrtc" | "frame" | null>(null);
+  const [transport, setTransport] = useState<"webrtc" | null>(null);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [prompt, setPrompt] = useState("");
   const [enhance, setEnhance] = useState(true);
@@ -441,7 +441,7 @@ function StagePage() {
       transportRef.current = t;
       await t.start();
 
-      // Kick off with a no-op prompt so frame mode has something to send
+      // Prime the connection with an empty prompt (no-op for the model)
       t.send({ prompt: "", enable_prompt_expansion: false });
 
       // QR code for remote

@@ -53,9 +53,20 @@ export const mintFalRealtimeToken = createServerFn({ method: "POST" })
       throw new Error(`fal_mint_failed_${res.status}`);
     }
 
-    const body = (await res.json()) as { token?: string } | string;
-    const token = typeof body === "string" ? body : body.token;
+    const text = (await res.text()).trim();
+    // Response may be a raw JWT or a JSON object like { token: "..." }
+    let token = text;
+    if (text.startsWith("{")) {
+      try {
+        const parsed = JSON.parse(text) as { token?: string };
+        token = parsed.token ?? "";
+      } catch {
+        // fall through
+      }
+    }
+    // Strip surrounding quotes if present
+    token = token.replace(/^"|"$/g, "");
     if (!token) throw new Error("fal_mint_no_token");
-    return { token };
+    return token;
   });
 
