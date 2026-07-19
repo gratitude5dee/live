@@ -223,7 +223,7 @@ export default function DesktopStage(p: StageViewProps) {
             />
 
             {/* Source badge — what Lucy is currently receiving */}
-            <div className="absolute left-2 top-2 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-white/70 backdrop-blur-xl">
+            <div className="absolute left-2 top-2 z-30 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-white/70 backdrop-blur-xl">
               <span className={
                 p.activeSource === "depth" ? "text-cyan-200"
                 : p.activeSource === "composite" ? "text-fuchsia-200"
