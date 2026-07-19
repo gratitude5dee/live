@@ -1,0 +1,1 @@
+UPDATE public.presets SET template_key = 'character_swap' WHERE name IN ('Streamer','Hooded Windbreaker','Leather Vest','Pink Stripe Kit');
