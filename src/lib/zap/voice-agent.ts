@@ -177,6 +177,38 @@ export class VoiceAgent {
       return;
     }
 
+    const dispatchFn = (name: string, callId: string, argsStr: string) => {
+      if (!name || !callId) return;
+      if (this.dispatchedCallIds.has(callId)) return;
+      this.dispatchedCallIds.add(callId);
+      let args: unknown = {};
+      try {
+        args = argsStr ? JSON.parse(argsStr) : {};
+      } catch {
+        args = {};
+      }
+      if (name === "apply_video_edit") this.resetIdle();
+      this.cb.onToolCall({ callId, name, args });
+    };
+
+    if (type === "response.function_call_arguments.done") {
+      const m = msg as { call_id?: string; name?: string; arguments?: string };
+      dispatchFn(String(m.name ?? ""), String(m.call_id ?? ""), String(m.arguments ?? ""));
+      return;
+    }
+
+    if (type === "response.output_item.done") {
+      const item = (msg as { item?: Record<string, unknown> }).item;
+      if (item && item.type === "function_call") {
+        dispatchFn(
+          String(item.name ?? ""),
+          String(item.call_id ?? ""),
+          String(item.arguments ?? ""),
+        );
+      }
+      return;
+    }
+
     if (type === "response.done") {
       const response = (msg as { response?: { output?: unknown[] } }).response;
       const output = Array.isArray(response?.output) ? response!.output : [];
@@ -184,16 +216,11 @@ export class VoiceAgent {
         if (!item || typeof item !== "object") continue;
         const it = item as Record<string, unknown>;
         if (it.type !== "function_call") continue;
-        const name = String(it.name ?? "");
-        const callId = String(it.call_id ?? "");
-        let args: unknown = {};
-        try {
-          args = it.arguments ? JSON.parse(String(it.arguments)) : {};
-        } catch {
-          args = {};
-        }
-        if (name === "apply_video_edit") this.resetIdle();
-        this.cb.onToolCall({ callId, name, args });
+        dispatchFn(
+          String(it.name ?? ""),
+          String(it.call_id ?? ""),
+          String(it.arguments ?? ""),
+        );
       }
       return;
     }
