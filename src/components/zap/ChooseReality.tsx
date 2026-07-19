@@ -93,25 +93,27 @@ export default function ChooseReality({ onEnter, disabled }: ChooseRealityProps)
 
       <div className="relative mx-auto max-w-7xl px-6 lg:px-10">
         {/* Section header */}
-        <div className="mb-16 flex flex-col items-center text-center md:mb-20">
-          <span className="mb-4 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.28em] text-white/70 backdrop-blur">
-            01 — Realities
+        <div className="mb-12 flex flex-col items-center text-center md:mb-20">
+          <span className="mb-4 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.28em] backdrop-blur">
+            <ShinyText text="01 — REALITIES" color="#8a8f98" shineColor="#ffffff" speed={5} spread={140} />
           </span>
-          <h2 className="max-w-4xl text-5xl font-semibold leading-[1.02] tracking-tight text-white md:text-7xl">
-            Choose your{" "}
-            <span className="bg-gradient-to-r from-[#67e8f9] via-[#c084fc] to-[#f472b6] bg-clip-text text-transparent">
-              reality.
-            </span>
+          <h2 className="max-w-4xl text-4xl font-semibold leading-[1.02] tracking-tight sm:text-5xl md:text-7xl">
+            <ShinyText text="Choose your reality." color="#7c8291" shineColor="#ffffff" speed={5} spread={140} />
           </h2>
-          <p className="mt-5 max-w-xl text-sm text-white/50 md:text-base">
-            Scroll, drag, or tap. Zap Live drops you into the selected scene the
-            moment Lucy connects.
+          <p className="mt-5 max-w-xl text-sm md:text-base">
+            <ShinyText
+              text="Scroll, drag, or tap. Zap Live drops you into the selected scene the moment Lucy connects."
+              color="#6b7280"
+              shineColor="#e5e7eb"
+              speed={6}
+              spread={160}
+            />
           </p>
         </div>
 
-        <div className="grid grid-cols-1 items-center gap-16 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-20">
+        <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,0.95fr)] lg:gap-20">
           {/* Wheel column — with safe gutter to clear top-left BubbleMenu */}
-          <div className="relative mx-auto h-[560px] w-full max-w-[560px] lg:pl-24">
+          <div className="relative mx-auto h-[420px] w-full max-w-[560px] sm:h-[520px] lg:h-[560px] lg:pl-24">
             {/* top / bottom fade mask */}
             <div
               className="pointer-events-none absolute inset-x-0 top-0 z-10 h-24"
