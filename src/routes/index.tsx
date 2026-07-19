@@ -355,7 +355,7 @@ function StagePage() {
   const applyPrompt = useCallback(
     async (
       text: string,
-      source: "text" | "gesture" | "face" | "preset" | "remote",
+      source: "text" | "gesture" | "face" | "preset" | "remote" | "voice",
       ref?: { dataUri: string; path?: string } | null,
     ) => {
       if (!transportRef.current) return;
