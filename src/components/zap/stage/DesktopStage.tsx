@@ -112,6 +112,15 @@ export default function DesktopStage(p: StageViewProps) {
               {p.recording ? "■ Stop" : "⬤ Record"}
             </SpecularButton>
           )}
+          {p.download && (
+            <a
+              href={p.download.url}
+              download={p.download.filename}
+              className="rounded-full border border-emerald-400/40 bg-emerald-400/20 px-4 py-1.5 text-xs font-medium text-emerald-100 backdrop-blur-xl transition hover:bg-emerald-400/30"
+            >
+              ⬇ Download take
+            </a>
+          )}
           {p.voiceAvailable && (
             <button
               onClick={p.toggleVoice}
