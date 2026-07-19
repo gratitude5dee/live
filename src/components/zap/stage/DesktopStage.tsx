@@ -11,18 +11,22 @@ function DepthVideo({ stream }: { stream: MediaStream }) {
     const el = ref.current;
     if (!el) return;
     el.srcObject = stream;
-    el.play().catch(() => {});
+    const play = () => el.play().catch(() => {});
+    el.addEventListener("loadedmetadata", play);
+    play();
+    return () => el.removeEventListener("loadedmetadata", play);
   }, [stream]);
   return (
     <video
       ref={ref}
-      className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover"
+      className="absolute inset-0 z-10 h-full w-full -scale-x-100 object-cover"
       autoPlay
       playsInline
       muted
     />
   );
 }
+
 
 
 export default function DesktopStage(p: StageViewProps) {
@@ -200,7 +204,9 @@ export default function DesktopStage(p: StageViewProps) {
           <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-black">
             <video
               ref={p.attachInputVideo}
-              className="h-full w-full -scale-x-100 object-cover"
+              className={`h-full w-full -scale-x-100 object-cover ${
+                p.depthOn && p.depthStream ? "invisible" : ""
+              }`}
               autoPlay
               playsInline
               muted
@@ -211,10 +217,13 @@ export default function DesktopStage(p: StageViewProps) {
             )}
             <canvas
               ref={p.overlayRef as React.RefObject<HTMLCanvasElement>}
-              className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
+              className={`pointer-events-none absolute inset-0 z-20 h-full w-full -scale-x-100 ${
+                p.depthOn ? "hidden" : ""
+              }`}
             />
+
             {/* Source badge — what Lucy is currently receiving */}
-            <div className="absolute left-2 top-2 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-white/70 backdrop-blur-xl">
+            <div className="absolute left-2 top-2 z-30 rounded-full border border-white/15 bg-black/60 px-2 py-0.5 text-[9px] uppercase tracking-[0.18em] text-white/70 backdrop-blur-xl">
               <span className={
                 p.activeSource === "depth" ? "text-cyan-200"
                 : p.activeSource === "composite" ? "text-fuchsia-200"
@@ -226,7 +235,7 @@ export default function DesktopStage(p: StageViewProps) {
               onClick={p.toggleDepth}
               disabled={!p.depthAvailable || p.depthLoading}
               title={p.depthAvailable ? "Toggle WebGPU depth stream to Lucy" : "WebGPU required — open in Chrome/Edge desktop"}
-              className={`absolute right-2 top-2 rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] backdrop-blur-xl transition disabled:opacity-40 ${
+              className={`absolute right-2 top-2 z-30 rounded-full border px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] backdrop-blur-xl transition disabled:opacity-40 ${
                 p.depthOn
                   ? "border-cyan-300/60 bg-cyan-400/25 text-cyan-100"
                   : "border-white/15 bg-black/60 text-white/70 hover:bg-white/10"

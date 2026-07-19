@@ -232,6 +232,14 @@ function StagePage() {
       });
       const src = inputVideoRef.current;
       if (src) engine.attach(src);
+      // Wait for the first real depth frame before swapping the outbound
+      // WebRTC track — otherwise Lucy receives a black canvas frame and
+      // freezes on its last raw-camera output.
+      try {
+        await engine.waitForFirstFrame(5000);
+      } catch (e) {
+        console.warn("depth first-frame wait failed", e);
+      }
       depthEngineRef.current = engine;
       depthOnRef.current = true;
       setDepthOn(true);

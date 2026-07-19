@@ -47,14 +47,21 @@ export class DepthEngine {
   private stopped = false;
   private source: HTMLVideoElement | null = null;
   private opts: Required<DepthAttachOptions>;
+  private firstFrameResolve: (() => void) | null = null;
+  readonly firstFrame: Promise<void>;
+
 
   constructor(opts: DepthAttachOptions = {}) {
+    this.firstFrame = new Promise<void>((res) => {
+      this.firstFrameResolve = res;
+    });
     this.opts = {
       fps: opts.fps ?? 24,
       targetAspect: opts.targetAspect ?? 9 / 16,
       targetHeight: opts.targetHeight ?? 1280,
       inputSize: opts.inputSize ?? 392,
     };
+
     const h = this.opts.targetHeight;
     const w = Math.round(h * this.opts.targetAspect);
     this.canvas = document.createElement("canvas");
@@ -183,6 +190,19 @@ export class DepthEngine {
     this.ctx.imageSmoothingEnabled = true;
     this.ctx.imageSmoothingQuality = "high";
     this.ctx.drawImage(tmp, ox, oy, outW, outH);
+    if (this.firstFrameResolve) {
+      this.firstFrameResolve();
+      this.firstFrameResolve = null;
+    }
+  }
+
+  waitForFirstFrame(timeoutMs = 4000): Promise<void> {
+    return Promise.race([
+      this.firstFrame,
+      new Promise<void>((_, rej) =>
+        setTimeout(() => rej(new Error("depth first frame timeout")), timeoutMs),
+      ),
+    ]);
   }
 
   stop() {
