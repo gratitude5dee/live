@@ -43,7 +43,7 @@ export const mintFalRealtimeToken = createServerFn({ method: "POST" })
       },
       body: JSON.stringify({
         allowed_apps: [app],
-        token_expiration: 60,
+        duration: 120,
       }),
     });
 
@@ -53,7 +53,9 @@ export const mintFalRealtimeToken = createServerFn({ method: "POST" })
       throw new Error(`fal_mint_failed_${res.status}`);
     }
 
-    const token = await res.text();
-    // fal returns the JWT as a plain string (possibly quoted).
-    return { token: token.replace(/^"|"$/g, "") };
+    const body = (await res.json()) as { token?: string } | string;
+    const token = typeof body === "string" ? body : body.token;
+    if (!token) throw new Error("fal_mint_no_token");
+    return { token };
   });
+
