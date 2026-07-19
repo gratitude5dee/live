@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import SiteFooter from "@/components/zap/SiteFooter";
 import LiquidEther from "@/components/reactbits/LiquidEther";
 import Strands from "@/components/reactbits/Strands";
 import GlassSurface from "@/components/reactbits/GlassSurface";
@@ -201,10 +202,17 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
       </div>
 
       {/* Choose your reality */}
-      <ChooseReality onEnter={onEnter} disabled={disabled} />
+      <div id="choose-reality">
+        <ChooseReality onEnter={onEnter} disabled={disabled} />
+      </div>
 
       {/* Modes — curved ring of edit modes */}
-      <ModesSection />
+      <div id="modes">
+        <ModesSection />
+      </div>
+
+      {/* Footer */}
+      <SiteFooter />
     </div>
   );
 }
