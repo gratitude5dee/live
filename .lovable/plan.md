@@ -1,37 +1,55 @@
+## Goal
 
-## 1. Cleaner outbound stream to Lucy
+Rename the four character-swap presets to their real names, tag Fire Hands as a new hand-driven category, and route MediaPipe baking based on the preset's category so Lucy gets the right signal (face for identity swaps, hands for hand VFX, clean webcam for everything else).
 
-The composite currently bakes hand landmarks (always) and face landmarks (character-swap only) into the 720×1280 canvas sent to Lucy. That's why the output looks noisy/blurry.
+## 1. Data changes (via `supabase--insert`)
 
-- `src/lib/zap/composite-stream.ts` — bump target to 1080×1920 (Lucy still downsamples but we hand it a crisper source), keep 30fps.
-- `src/routes/index.tsx` — stop baking hand landmarks into the outbound stream. The compositor's `draw` callback becomes a no-op unless the active preset is `character_swap` (then draw face mesh only). Hand/face overlays continue to render into the PiP overlay canvas for user feedback — nothing changes visually in the Camera card.
+Update the seeded rows in `public.presets` (user_id IS NULL):
 
-Net effect: Lucy receives a clean, center-cropped 9:16 video with no baked overlays for normal presets, only a face mesh when re-identification actually needs it.
+- id 11 "Hooded Windbreaker" → name "YE", emoji 🕶️
+- id 13 "Leather Vest" → name "DRAKE", emoji 🎤
+- id 15 "Streamer" → name "N3ON", emoji 💻
+- id 16 "Pink Stripe Kit" → name "MBAPPE", emoji ⚽
+- id 6 "Fire Hands" → set `template_key = 'gesture_fx'` (keep name/emoji/prompt)
 
-## 2. Redesign the left preset rail
+No schema migration needed — `template_key` is already a free-form text column, so "gesture_fx" is a valid new value alongside the existing "character_swap", "object_add", "clothing_tryon", "object_replace".
 
-Current rows visibly clip the preset name (top half cut off) and the subtitle bleeds into the next row.
+## 2. Compositor gating — `src/routes/index.tsx`
 
-- `src/components/zap/stage/DesktopStage.tsx` `PresetRow`:
-  - Give each row a defined min-height, `items-center`, and remove the two-line stacked label — one line, `truncate`, with a small right-aligned badge for shortcut / "drop image".
-  - Slightly smaller thumbnail (h-10 w-10), consistent padding, tighter `gap-2` list spacing.
-  - Add a section separator between "Templates" (kind === 'template') and standard presets so the dashed template rows read as their own group.
-  - Rail width 260 → 240px; keep scroll but ensure last row isn't clipped by parent (add `pb-2` inside scroll region).
+Widen the ref that tracks the active category and drive both overlays from it:
 
-Purely presentational — no store or data changes.
+```ts
+const activePresetKindRef = useRef<"character_swap" | "gesture_fx" | "other">("other");
+```
 
-## 3. New "Object Replace" template preset
+- On `stopSession` / preset clear → `"other"`.
+- On `applyPreset(preset)` →
+  - `character_swap` if `preset.template_key === "character_swap"`
+  - `gesture_fx` if `preset.template_key === "gesture_fx"`
+  - else `"other"`.
+- In the `CompositeStream` draw loop:
+  - Bake face landmarks only when `activePresetKindRef.current === "character_swap"` (current behavior, unchanged).
+  - Bake hand landmarks only when `activePresetKindRef.current === "gesture_fx"` (new — currently hands are never baked into the outbound stream).
+  - Otherwise draw the raw video frame only.
+- PiP overlay for the user keeps showing both face + hands regardless (feedback only).
 
-Follows the same drop-image + auto-prompt pattern as Object add-in / Try-on.
+## 3. Preset rail categorization — `src/components/zap/stage/DesktopStage.tsx` and `MobileStage.tsx`
 
-- `src/lib/zap/prompt-templates.ts`:
-  - Add `object_replace` to `TemplateKey`.
-  - `buildTemplatePrompt('object_replace', { detail, placement })` returns a Lucy "Add/Replace" prompt: replaces the object the person is holding (or the target region) with the reference image, matching size/lighting, identity+background unchanged.
-  - Add matching `TEMPLATE_META` entry (placement label: "What to replace", placeholder: "e.g. the phone in the person's hand"; detail placeholder: "e.g. the plush green backpack from the reference image").
-- DB migration (single statement, additive): insert one row into `presets` with `kind='template'`, `template_key='object_replace'`, name "Object replace", emoji 🔄, `requires_ref=false` (image comes from the dialog, not the ref slot).
-- `TemplateDialog.tsx` — no changes required; it already renders any key present in `TEMPLATE_META` and uploads the dropped image via the existing `onApply` path in `src/routes/index.tsx`.
+Group the rail by category derived from `template_key`:
 
-## Out of scope
+- **Templates**: `object_add`, `clothing_tryon`, `object_replace`
+- **Character Swap**: `character_swap` (YE, DRAKE, N3ON, MBAPPE)
+- **Gesture FX**: `gesture_fx` (Fire Hands)
+- **Looks**: everything else (Beach, Neon City, Anime, …)
 
-- No changes to fal transport, MediaPipe engines, or PiP overlay rendering.
-- No mobile stage changes (all three fixes are desktop-visible; template preset appears on mobile automatically via shared preset list).
+Each group renders as a small section header (using existing `ShinyText`) followed by the existing single-line preset rows. No new components — just partition the array before render.
+
+## 4. Out of scope
+
+- No changes to `composite-stream.ts` internals, aspect ratio, or resolution.
+- No changes to the prompts themselves (only names/emojis for the four swaps).
+- No new template dialogs — YE/DRAKE/N3ON/MBAPPE remain non-template presets that apply the seeded prompt + baked-in reference image on click.
+
+## Result
+
+Clicking YE / DRAKE / N3ON / MBAPPE sends the face-landmark-baked stream to Lucy (better identity lock). Clicking Fire Hands sends the hand-landmark-baked stream (crisper effect anchoring). Everything else sends the clean 1080×1920 webcam frame.
