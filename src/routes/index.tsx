@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
@@ -10,8 +10,10 @@ import { VisionBuffer } from "@/lib/zap/vision-buffer";
 import { drawHandOverlay, drawFaceOverlay } from "@/lib/zap/overlay";
 import { loadGestureRecognizer, loadFaceLandmarker } from "@/lib/zap/mediapipe";
 import LandingHero from "@/components/zap/LandingHero";
-import SpecularButton from "@/components/reactbits/SpecularButton";
 import TemplateDialog, { type TemplateApplyPayload } from "@/components/zap/TemplateDialog";
+import DesktopStage from "@/components/zap/stage/DesktopStage";
+import MobileStage from "@/components/zap/stage/MobileStage";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { TemplateKey } from "@/lib/zap/prompt-templates";
 import {
   REACTIVE_PROMPTS,
