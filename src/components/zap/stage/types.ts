@@ -69,6 +69,15 @@ export interface StageViewProps {
   // which stream is currently being sent to Lucy — for on-screen confirmation
   activeSource: "raw" | "composite" | "depth";
 
+  // Computah voice control
+  voiceState: VoiceState;
+  voiceTranscript: string;
+  voiceAck: string;
+  voiceIntent: string | null;
+  voiceIntentLabel: string | null;
+  voiceAvailable: boolean;
+  toggleVoice: () => void;
+
   // baked-landmark compositor toggle (character_swap / gesture_fx only)
   bakeLandmarks: boolean;
   toggleBakeLandmarks: () => void;
