@@ -28,6 +28,7 @@ export class VideoTransport {
   private inputStream: MediaStream;
   private cb: TransportCallbacks;
   private pc: RTCPeerConnection | null = null;
+  private videoSender: RTCRtpSender | null = null;
   private connection: LucyRealtimeConnection | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
@@ -51,6 +52,22 @@ export class VideoTransport {
       }
     }
   }
+
+  /**
+   * Hot-swap the outbound video track without renegotiating SDP.
+   * Same-kind swap (video → video) is supported natively by WebRTC.
+   */
+  async replaceVideoTrack(track: MediaStreamTrack | null) {
+    if (!this.videoSender) return;
+    if (this.videoSender.track && track && this.videoSender.track.id === track.id) return;
+    try {
+      await this.videoSender.replaceTrack(track);
+      if (track) track.enabled = !this.outboundPaused;
+    } catch (error) {
+      console.warn("replaceVideoTrack failed", error);
+    }
+  }
+
 
   async start() {
     await this.beginWebRTC([{ urls: "stun:stun.l.google.com:19302" }]);
