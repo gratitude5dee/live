@@ -1,6 +1,7 @@
 import LiquidEther from "@/components/reactbits/LiquidEther";
 import Strands from "@/components/reactbits/Strands";
 import GlassSurface from "@/components/reactbits/GlassSurface";
+import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
 
 interface LandingHeroProps {
   onEnter: () => void;
