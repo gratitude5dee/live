@@ -58,4 +58,8 @@ export interface StageViewProps {
   depthAvailable: boolean;
   depthProgress: number;
   toggleDepth: () => void;
+  depthStream: MediaStream | null;
+
+  // which stream is currently being sent to Lucy — for on-screen confirmation
+  activeSource: "raw" | "composite" | "depth";
 }
