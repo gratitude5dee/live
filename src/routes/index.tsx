@@ -753,43 +753,24 @@ function StagePage() {
 
       runInferenceLoop();
 
-      // Build the compositor eagerly so we can hot-swap to it the moment a
-      // Character Swap / Gesture FX preset activates. By default we send the
-      // raw camera track to Lucy for maximum quality (no canvas re-encode).
-      try {
-        const src = inputVideoRef.current;
-        if (src) {
-          // Ensure the source video has dimensions before we start reading it.
-          if (src.readyState < 2) {
-            await new Promise<void>((resolve) => {
-              const onReady = () => {
-                src.removeEventListener("loadedmetadata", onReady);
-                resolve();
-              };
-              src.addEventListener("loadedmetadata", onReady, { once: true });
-              // Safety timeout — never block session start on this.
-              setTimeout(resolve, 800);
-            });
-          }
-          const compositor = new CompositeStream(
-            src,
-            (ctx, _w, _h) => {
-              // Only bake landmarks when the active preset opts in.
-              // The on-screen PiP still shows both overlays for user feedback.
-              const kind = activePresetKindRef.current;
-              if (kind === "character_swap") {
-                drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
-              } else if (kind === "gesture_fx") {
-                drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
-              }
-            },
-            { fps: 30, targetAspect: 9 / 16, targetHeight: 1920 },
-          );
-          compositorRef.current = compositor;
-        }
-      } catch (e) {
-        console.warn("compositor unavailable — clean camera only", e);
+      // Ensure the camera video has dimensions ready so a lazy compositor
+      // (built later by syncOutboundSource) can start drawing immediately.
+      const camEl = inputVideoRef.current;
+      if (camEl && camEl.readyState < 2) {
+        await new Promise<void>((resolve) => {
+          const onReady = () => {
+            camEl.removeEventListener("loadedmetadata", onReady);
+            resolve();
+          };
+          camEl.addEventListener("loadedmetadata", onReady, { once: true });
+          setTimeout(resolve, 800);
+        });
       }
+      // NOTE: the CompositeStream is intentionally NOT built here. It is
+      // constructed on demand by syncOutboundSource() only when a
+      // Character-Swap or Gesture-FX preset activates. Clean-camera presets
+      // and freeform prompts send the raw MediaStreamTrack straight to Lucy.
+
 
       // Start fal — always begin with the raw camera track. If a preset kind
       // is active, syncOutboundSource() will swap in the compositor track
