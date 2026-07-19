@@ -744,7 +744,7 @@ function StagePage() {
       setError(String((e as Error)?.message ?? e));
       setConnState("failed");
     }
-  }, [applyPrompt, applyPreset, clearPrompt, handleGesture, presets, undo, stopSession]);
+  }, [applyPrompt, applyPreset, clearPrompt, handleGesture, presets, undo, stopSession, syncOutboundSource]);
 
   // --- MediaPipe inference loop (single rAF, both engines, adaptive rate) ---
   const runInferenceLoop = useCallback(() => {
