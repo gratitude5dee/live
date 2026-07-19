@@ -51,4 +51,11 @@ export interface StageViewProps {
 
   // download
   download: { url: string; filename: string } | null;
+
+  // depth (webgpu)
+  depthOn: boolean;
+  depthLoading: boolean;
+  depthAvailable: boolean;
+  depthProgress: number;
+  toggleDepth: () => void;
 }

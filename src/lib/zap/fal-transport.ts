@@ -29,10 +29,13 @@ export class VideoTransport {
   private cb: TransportCallbacks;
   private pc: RTCPeerConnection | null = null;
   private videoSender: RTCRtpSender | null = null;
+  private pendingTrack: MediaStreamTrack | null = null;
   private connection: LucyRealtimeConnection | null = null;
   private connectTimeout: ReturnType<typeof setTimeout> | null = null;
   private closed = false;
   private outboundPaused = false;
+  private remoteDescriptionSet = false;
+  private pendingRemoteCandidates: RTCIceCandidateInit[] = [];
   private lastPrompt: {
     prompt: string;
     enable_prompt_expansion?: boolean;
@@ -56,11 +59,23 @@ export class VideoTransport {
   /**
    * Hot-swap the outbound video track without renegotiating SDP.
    * Same-kind swap (video → video) is supported natively by WebRTC.
+   * If the sender doesn't exist yet (called before start()), the track is
+   * queued and applied once the peer connection is created.
    */
   async replaceVideoTrack(track: MediaStreamTrack | null) {
-    if (!this.videoSender) return;
+    if (!this.videoSender) {
+      this.pendingTrack = track;
+      return;
+    }
     if (this.videoSender.track && track && this.videoSender.track.id === track.id) return;
     try {
+      if (track) {
+        try {
+          (track as MediaStreamTrack & { contentHint?: string }).contentHint = "detail";
+        } catch {
+          /* older UAs */
+        }
+      }
       await this.videoSender.replaceTrack(track);
       if (track) track.enabled = !this.outboundPaused;
     } catch (error) {
@@ -87,6 +102,12 @@ export class VideoTransport {
       for (const track of this.inputStream.getVideoTracks()) {
         const sender = pc.addTrack(track, this.inputStream);
         if (!this.videoSender) this.videoSender = sender;
+      }
+      // Apply any track that was requested before the sender existed.
+      if (this.pendingTrack && this.videoSender) {
+        const pending = this.pendingTrack;
+        this.pendingTrack = null;
+        void this.replaceVideoTrack(pending);
       }
 
       pc.addTransceiver("video", { direction: "recvonly" });
@@ -173,11 +194,23 @@ export class VideoTransport {
           } else if (message.sdp && message.type) {
             void this.pc
               .setRemoteDescription({ type: message.type, sdp: message.sdp })
+              .then(() => {
+                this.remoteDescriptionSet = true;
+                const buf = this.pendingRemoteCandidates;
+                this.pendingRemoteCandidates = [];
+                for (const c of buf) {
+                  void this.pc?.addIceCandidate(c).catch(() => {});
+                }
+              })
               .catch((error) => this.cb.onError(error));
           } else if (message.candidate) {
-            void this.pc
-              .addIceCandidate(message.candidate)
-              .catch((error) => this.cb.onError(error));
+            if (!this.remoteDescriptionSet) {
+              this.pendingRemoteCandidates.push(message.candidate);
+            } else {
+              void this.pc
+                .addIceCandidate(message.candidate)
+                .catch((error) => this.cb.onError(error));
+            }
           }
         },
         onError: (error) => this.cb.onError(error),

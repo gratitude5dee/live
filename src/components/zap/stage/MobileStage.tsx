@@ -105,6 +105,18 @@ export default function MobileStage(p: StageViewProps) {
           ref={p.overlayRef as React.RefObject<HTMLCanvasElement>}
           className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
         />
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            p.toggleDepth();
+          }}
+          disabled={!p.depthAvailable || p.depthLoading}
+          className={`absolute right-1 top-1 rounded-full px-1.5 py-0.5 text-[8px] uppercase tracking-widest backdrop-blur-xl disabled:opacity-40 ${
+            p.depthOn ? "bg-cyan-400/30 text-cyan-100" : "bg-black/60 text-white/80"
+          }`}
+        >
+          {p.depthLoading ? `${p.depthProgress}%` : p.depthOn ? "on" : "D"}
+        </button>
         {!p.facePresent && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-center text-[9px] text-amber-300">
             Step in
