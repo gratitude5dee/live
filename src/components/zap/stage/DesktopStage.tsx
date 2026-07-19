@@ -14,21 +14,47 @@ export default function DesktopStage(p: StageViewProps) {
 
   return (
     <div
-      className="grid min-h-[100dvh] grid-rows-[auto_1fr_auto] bg-[#07070B] text-[#FAFAFA]"
+      className="relative min-h-[100dvh] w-screen overflow-hidden bg-[#07070B] text-[#FAFAFA]"
       style={{ fontFamily: "'Geist', 'Plus Jakarta Sans', system-ui, sans-serif" }}
     >
+      {/* Full-bleed Lucy output */}
+      <div className="fixed inset-0 z-0 bg-black">
+        <video
+          ref={p.attachOutputVideo}
+          className="h-full w-full object-cover"
+          autoPlay
+          playsInline
+          muted
+        />
+        {p.connState !== "live" && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/80 backdrop-blur-sm">
+            <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
+            <span className="text-[11px] uppercase tracking-[0.24em] text-white/60">
+              {p.connState === "connecting"
+                ? "Connecting to Lucy"
+                : p.connState === "requesting_camera"
+                  ? "Requesting camera"
+                  : p.connState}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Vignette / gradient overlay for HUD legibility */}
+      <div className="pointer-events-none fixed inset-0 z-10 bg-[radial-gradient(ellipse_at_center,transparent_40%,rgba(0,0,0,0.55)_100%)]" />
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-10 h-40 bg-gradient-to-b from-black/70 to-transparent" />
+      <div className="pointer-events-none fixed inset-x-0 bottom-0 z-10 h-48 bg-gradient-to-t from-black/80 to-transparent" />
+
       {/* Top bar */}
-      <header className="flex items-center justify-between px-8 py-5">
+      <header className="fixed inset-x-0 top-0 z-20 flex items-center justify-between px-8 py-5">
         <div className="flex items-center gap-4">
           <img src={wzrdLogo.url} alt="WZRD" className="h-8 w-auto opacity-90" />
-          <div className="ml-2 flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[11px] backdrop-blur-xl">
+          <div className="ml-2 flex items-center gap-2 rounded-full border border-white/10 bg-black/50 px-3 py-1.5 text-[11px] backdrop-blur-xl">
             <span className={`h-1.5 w-1.5 rounded-full ${statusColor}`} />
-            <span className="uppercase tracking-[0.14em] text-white/60">{p.connState}</span>
-            {p.transport && <span className="text-white/30">· {p.transport}</span>}
+            <span className="uppercase tracking-[0.14em] text-white/70">{p.connState}</span>
+            {p.transport && <span className="text-white/40">· {p.transport}</span>}
           </div>
-          {p.perfMode && (
-            <Chip tone="amber">Performance mode</Chip>
-          )}
+          {p.perfMode && <Chip tone="amber">Performance mode</Chip>}
           {!p.facePresent && p.connState === "live" && (
             <Chip tone="amber">Step into frame</Chip>
           )}
@@ -37,12 +63,12 @@ export default function DesktopStage(p: StageViewProps) {
         <div className="flex items-center gap-2">
           <Link
             to="/library"
-            className="rounded-full border border-white/10 bg-white/[0.03] px-3.5 py-1.5 text-xs text-white/70 transition hover:bg-white/[0.06]"
+            className="rounded-full border border-white/10 bg-black/50 px-3.5 py-1.5 text-xs text-white/80 backdrop-blur-xl transition hover:bg-white/10"
           >
             Library
           </Link>
           {p.remainingMs !== null && (
-            <span className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 font-mono text-xs tabular-nums text-white/70">
+            <span className="rounded-full border border-white/10 bg-black/50 px-3 py-1.5 font-mono text-xs tabular-nums text-white/80 backdrop-blur-xl">
               {Math.floor(p.remainingMs / 1000 / 60)}:
               {String(Math.floor((p.remainingMs / 1000) % 60)).padStart(2, "0")}
             </span>
@@ -65,14 +91,14 @@ export default function DesktopStage(p: StageViewProps) {
             <a
               href={p.download.url}
               download={p.download.filename}
-              className="rounded-full border border-emerald-400/40 bg-emerald-400/10 px-4 py-1.5 text-xs font-medium text-emerald-200 transition hover:bg-emerald-400/20"
+              className="rounded-full border border-emerald-400/40 bg-emerald-400/20 px-4 py-1.5 text-xs font-medium text-emerald-100 backdrop-blur-xl transition hover:bg-emerald-400/30"
             >
               ⬇ Download take
             </a>
           )}
           <button
             onClick={() => p.stopSession("manual")}
-            className="rounded-full border border-red-400/40 bg-red-400/10 px-4 py-1.5 text-xs font-medium text-red-200 transition hover:bg-red-400/20"
+            className="rounded-full border border-red-400/40 bg-red-400/20 px-4 py-1.5 text-xs font-medium text-red-100 backdrop-blur-xl transition hover:bg-red-400/30"
           >
             Disconnect
           </button>
@@ -80,150 +106,119 @@ export default function DesktopStage(p: StageViewProps) {
       </header>
 
       {p.error && (
-        <div className="mx-8 mb-2 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200">
+        <div className="fixed left-1/2 top-20 z-30 -translate-x-1/2 rounded-xl border border-red-500/40 bg-red-500/20 px-4 py-2 text-sm text-red-100 backdrop-blur-xl">
           {p.error}
         </div>
       )}
 
-      {/* 3-zone cockpit */}
-      <main className="grid min-h-0 grid-cols-[280px_minmax(0,1fr)_320px] gap-6 px-8 pb-4">
-        {/* Left rail: presets */}
-        <aside className="flex min-h-0 flex-col rounded-[2rem] border border-white/10 bg-white/[0.02] p-1.5">
-          <div className="flex min-h-0 flex-col rounded-[calc(2rem-0.375rem)] bg-black/40 p-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
-                Presets
-              </span>
-              {p.applied && (
-                <button
-                  onClick={p.savePreset}
-                  className="text-[10px] uppercase tracking-widest text-white/40 hover:text-white/80"
-                >
-                  ＋ Save
-                </button>
-              )}
-            </div>
-            <div className="-mr-2 flex flex-1 flex-col gap-2 overflow-y-auto pr-2">
-              {p.presets.map((preset, i) => (
-                <PresetRow
-                  key={preset.id}
-                  preset={preset}
-                  index={i}
-                  refImage={p.refImage}
-                  onApply={() => p.applyPreset(preset)}
-                  onTemplate={(k, n) => p.openTemplate(k, n)}
-                />
-              ))}
-            </div>
+      {/* Left rail: presets */}
+      <aside className="fixed left-6 top-24 bottom-32 z-20 flex w-[260px] flex-col rounded-[2rem] border border-white/10 bg-black/50 p-1.5 backdrop-blur-2xl">
+        <div className="flex min-h-0 flex-1 flex-col rounded-[calc(2rem-0.375rem)] bg-black/40 p-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-[10px] uppercase tracking-[0.22em] text-white/40">
+              Presets
+            </span>
+            {p.applied && (
+              <button
+                onClick={p.savePreset}
+                className="text-[10px] uppercase tracking-widest text-white/40 hover:text-white/80"
+              >
+                ＋ Save
+              </button>
+            )}
           </div>
-        </aside>
-
-        {/* Center: video */}
-        <section className="flex min-h-0 items-center justify-center">
-          <div className="relative flex h-full max-h-[calc(100dvh-260px)] items-center justify-center">
-            <div className="relative aspect-[9/16] h-full rounded-[2rem] border border-white/10 bg-white/[0.03] p-1.5 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.8)]">
-              <div className="relative h-full w-full overflow-hidden rounded-[calc(2rem-0.375rem)] bg-black shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]">
-                <video
-                  ref={p.attachOutputVideo}
-                  className="h-full w-full object-cover"
-                  autoPlay
-                  playsInline
-                  muted
-                />
-                {p.connState !== "live" && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 backdrop-blur-sm">
-                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white/80" />
-                    <span className="text-[11px] uppercase tracking-[0.24em] text-white/60">
-                      {p.connState === "connecting"
-                        ? "Connecting to Lucy"
-                        : p.connState === "requesting_camera"
-                          ? "Requesting camera"
-                          : p.connState}
-                    </span>
-                  </div>
-                )}
-                {p.applied && (
-                  <div className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-4">
-                    <p className="line-clamp-2 text-xs text-emerald-200/90">
-                      → {p.applied.text}
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="-mr-2 flex flex-1 flex-col gap-2 overflow-y-auto pr-2">
+            {p.presets.map((preset, i) => (
+              <PresetRow
+                key={preset.id}
+                preset={preset}
+                index={i}
+                refImage={p.refImage}
+                onApply={() => p.applyPreset(preset)}
+                onTemplate={(k, n) => p.openTemplate(k, n)}
+              />
+            ))}
           </div>
-        </section>
+        </div>
+      </aside>
 
-        {/* Right HUD panel */}
-        <aside className="flex min-h-0 flex-col gap-4">
-          <HudCard label="Camera">
-            <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-black">
-              <video
-                ref={p.attachInputVideo}
-                className="h-full w-full -scale-x-100 object-cover"
-                autoPlay
-                playsInline
-                muted
-              />
-              <canvas
-                ref={p.overlayRef as React.RefObject<HTMLCanvasElement>}
-                className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
-              />
-              {!p.facePresent && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-[11px] text-amber-300">
-                  Step into frame
-                </div>
-              )}
-            </div>
-            {p.liveGesture.label && (
-              <div className="mt-2 flex items-center justify-between text-[11px] text-white/60">
-                <span>
-                  ✋ {p.liveGesture.label}
-                  <span className="ml-1 text-white/30">
-                    {p.liveGesture.score.toFixed(2)}
-                  </span>
-                </span>
-                {p.liveGesture.hold > 0 && (
-                  <div className="ml-3 h-1 flex-1 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="h-full bg-cyan-300 transition-all"
-                      style={{ width: `${p.liveGesture.hold * 100}%` }}
-                    />
-                  </div>
-                )}
+      {/* Right HUD stack */}
+      <aside className="fixed right-6 top-24 z-20 flex w-[300px] flex-col gap-3">
+        <HudCard label="Camera">
+          <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-black">
+            <video
+              ref={p.attachInputVideo}
+              className="h-full w-full -scale-x-100 object-cover"
+              autoPlay
+              playsInline
+              muted
+            />
+            <canvas
+              ref={p.overlayRef as React.RefObject<HTMLCanvasElement>}
+              className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
+            />
+            {!p.facePresent && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-[11px] text-amber-300">
+                Step into frame
               </div>
             )}
-          </HudCard>
-
-          {p.qrDataUrl && (
-            <HudCard label="Phone remote">
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-white p-1.5">
-                  <img src={p.qrDataUrl} alt="Remote QR" className="h-24 w-24" />
+          </div>
+          {p.liveGesture.label && (
+            <div className="mt-2 flex items-center justify-between text-[11px] text-white/60">
+              <span>
+                ✋ {p.liveGesture.label}
+                <span className="ml-1 text-white/30">
+                  {p.liveGesture.score.toFixed(2)}
+                </span>
+              </span>
+              {p.liveGesture.hold > 0 && (
+                <div className="ml-3 h-1 flex-1 overflow-hidden rounded-full bg-white/10">
+                  <div
+                    className="h-full bg-cyan-300 transition-all"
+                    style={{ width: `${p.liveGesture.hold * 100}%` }}
+                  />
                 </div>
-                <p className="text-[11px] leading-snug text-white/50">
-                  Scan to drive this session from your phone.
-                </p>
-              </div>
-            </HudCard>
+              )}
+            </div>
           )}
+        </HudCard>
 
-          <HudCard label="Session">
-            <dl className="grid grid-cols-2 gap-y-1.5 text-[11px]">
-              <dt className="text-white/40">Transport</dt>
-              <dd className="text-right text-white/80">{p.transport ?? "—"}</dd>
-              <dt className="text-white/40">Reactive</dt>
-              <dd className="text-right text-white/80">{p.reactiveOn ? "on" : "off"}</dd>
-              <dt className="text-white/40">Pending upload</dt>
-              <dd className="text-right text-white/80">{p.pendingUpload}</dd>
-            </dl>
+        {p.qrDataUrl && (
+          <HudCard label="Phone remote">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-white p-1.5">
+                <img src={p.qrDataUrl} alt="Remote QR" className="h-20 w-20" />
+              </div>
+              <p className="text-[11px] leading-snug text-white/60">
+                Scan to drive this session from your phone.
+              </p>
+            </div>
           </HudCard>
-        </aside>
-      </main>
+        )}
+
+        <HudCard label="Session">
+          <dl className="grid grid-cols-2 gap-y-1.5 text-[11px]">
+            <dt className="text-white/40">Transport</dt>
+            <dd className="text-right text-white/80">{p.transport ?? "—"}</dd>
+            <dt className="text-white/40">Reactive</dt>
+            <dd className="text-right text-white/80">{p.reactiveOn ? "on" : "off"}</dd>
+            <dt className="text-white/40">Pending upload</dt>
+            <dd className="text-right text-white/80">{p.pendingUpload}</dd>
+          </dl>
+        </HudCard>
+      </aside>
+
+      {p.applied && (
+        <div className="pointer-events-none fixed inset-x-0 bottom-28 z-20 flex justify-center px-8">
+          <p className="max-w-2xl rounded-full border border-white/10 bg-black/60 px-4 py-2 text-center text-xs text-emerald-200/90 backdrop-blur-xl line-clamp-2">
+            → {p.applied.text}
+          </p>
+        </div>
+      )}
 
       {/* Prompt dock */}
-      <footer className="px-8 pb-6 pt-2">
-        <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.02] p-1.5 backdrop-blur-xl">
+      <footer className="fixed inset-x-0 bottom-0 z-20 px-8 pb-6 pt-2">
+        <div className="mx-auto max-w-4xl rounded-[1.75rem] border border-white/10 bg-black/60 p-1.5 backdrop-blur-2xl">
           <div className="flex flex-wrap items-center gap-2 rounded-[calc(1.75rem-0.375rem)] bg-black/40 p-3 shadow-[inset_0_1px_1px_rgba(255,255,255,0.06)]">
             <input
               value={p.prompt}
