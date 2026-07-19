@@ -135,8 +135,48 @@ function StagePage() {
   const [depthLoading, setDepthLoading] = useState(false);
   const [depthProgress, setDepthProgress] = useState(0);
   const [depthAvailable] = useState(() => DepthEngine.webgpuAvailable());
+  const [depthStream, setDepthStream] = useState<MediaStream | null>(null);
   const depthOnRef = useRef(false);
   const depthEngineRef = useRef<DepthEngine | null>(null);
+
+  // Which stream is currently attached to Lucy's outbound WebRTC sender.
+  // Surfaced in the camera PiP so users can confirm the pipeline at a glance.
+  const [activeSource, setActiveSource] = useState<"raw" | "composite" | "depth">("raw");
+
+  // Lazily build / dispose the compositor. On mobile Safari, the extra 30fps
+  // canvas re-encode is expensive and softens the feed, so we only spin it
+  // up when a Character-Swap or Gesture-FX preset actually needs baked
+  // landmarks — every other preset (and freeform prompts) send the raw
+  // MediaStreamTrack from getUserMedia straight to Lucy.
+  const ensureCompositor = useCallback((): MediaStream | null => {
+    if (compositorRef.current) return compositorRef.current.stream;
+    const src = inputVideoRef.current;
+    if (!src) return null;
+    try {
+      const compositor = new CompositeStream(
+        src,
+        (ctx) => {
+          const kind = activePresetKindRef.current;
+          if (kind === "character_swap") {
+            drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+          } else if (kind === "gesture_fx") {
+            drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
+          }
+        },
+        { fps: 30, targetAspect: 9 / 16, targetHeight: 1920 },
+      );
+      compositorRef.current = compositor;
+      return compositor.stream;
+    } catch (e) {
+      console.warn("compositor init failed", e);
+      return null;
+    }
+  }, []);
+
+  const disposeCompositor = useCallback(() => {
+    compositorRef.current?.stop();
+    compositorRef.current = null;
+  }, []);
 
   // Pick raw camera / compositor / depth for the outbound video track based on
   // active preset kind + depth toggle, and hot-swap via replaceTrack.
@@ -144,22 +184,34 @@ function StagePage() {
     const transport = transportRef.current;
     if (!transport) return;
     let src: MediaStream | null = null;
+    let label: "raw" | "composite" | "depth" = "raw";
     if (depthOnRef.current && depthEngineRef.current) {
       src = depthEngineRef.current.stream;
+      label = "depth";
+      // Depth replaces baked landmarks — drop the compositor to save CPU.
+      disposeCompositor();
     } else {
       const kind = activePresetKindRef.current;
       const useComposite = kind === "character_swap" || kind === "gesture_fx";
-      src = useComposite
-        ? compositorRef.current?.stream ?? inputStreamRef.current
-        : inputStreamRef.current;
+      if (useComposite) {
+        src = ensureCompositor() ?? inputStreamRef.current;
+        label = compositorRef.current ? "composite" : "raw";
+      } else {
+        // Clean camera path — tear down the compositor so we're not paying
+        // for a canvas re-encode when nothing needs it.
+        disposeCompositor();
+        src = inputStreamRef.current;
+        label = "raw";
+      }
     }
     const track = src?.getVideoTracks()[0] ?? null;
     if (track) void transport.replaceVideoTrack(track);
-  }, []);
+    setActiveSource(label);
+  }, [ensureCompositor, disposeCompositor]);
 
   const toggleDepth = useCallback(async () => {
     if (!depthAvailable) {
-      toast.error("WebGPU not available in this browser");
+      toast.error("WebGPU not available — try Chrome or Edge on desktop");
       return;
     }
     if (depthOnRef.current) {
@@ -167,6 +219,7 @@ function StagePage() {
       setDepthOn(false);
       depthEngineRef.current?.stop();
       depthEngineRef.current = null;
+      setDepthStream(null);
       syncOutboundSource();
       return;
     }
@@ -182,6 +235,7 @@ function StagePage() {
       depthEngineRef.current = engine;
       depthOnRef.current = true;
       setDepthOn(true);
+      setDepthStream(engine.stream);
       syncOutboundSource();
       toast.success("Depth stream engaged");
     } catch (err) {
@@ -195,6 +249,7 @@ function StagePage() {
       setDepthLoading(false);
     }
   }, [depthAvailable, syncOutboundSource]);
+
 
 
 
@@ -558,6 +613,9 @@ function StagePage() {
     depthEngineRef.current = null;
     depthOnRef.current = false;
     setDepthOn(false);
+    setDepthStream(null);
+    setActiveSource("raw");
+
     outputStreamRef.current = null;
     if (channelRef.current) {
       supabase.removeChannel(channelRef.current);
@@ -595,16 +653,30 @@ function StagePage() {
 
     setConnState("requesting_camera");
     try {
+      // iOS Safari downgrades resolution aggressively when width/height/
+      // aspectRatio all conflict — request the phone's native portrait via
+      // facingMode only and let the browser pick optimal dims. Desktop can
+      // safely ask for 1080p landscape and we crop client-side.
+      const mobileCapture = typeof window !== "undefined"
+        && window.matchMedia("(max-width: 768px)").matches;
+      const videoConstraints: MediaTrackConstraints = mobileCapture
+        ? {
+            facingMode,
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            frameRate: { ideal: 30 },
+          }
+        : {
+            facingMode,
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            frameRate: { ideal: 30 },
+          };
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
-          aspectRatio: { ideal: 9 / 16 },
-          frameRate: { ideal: 30 },
-          facingMode,
-        },
+        video: videoConstraints,
         audio: false,
       });
+
 
       inputStreamRef.current = stream;
       if (inputVideoRef.current) {
@@ -684,43 +756,24 @@ function StagePage() {
 
       runInferenceLoop();
 
-      // Build the compositor eagerly so we can hot-swap to it the moment a
-      // Character Swap / Gesture FX preset activates. By default we send the
-      // raw camera track to Lucy for maximum quality (no canvas re-encode).
-      try {
-        const src = inputVideoRef.current;
-        if (src) {
-          // Ensure the source video has dimensions before we start reading it.
-          if (src.readyState < 2) {
-            await new Promise<void>((resolve) => {
-              const onReady = () => {
-                src.removeEventListener("loadedmetadata", onReady);
-                resolve();
-              };
-              src.addEventListener("loadedmetadata", onReady, { once: true });
-              // Safety timeout — never block session start on this.
-              setTimeout(resolve, 800);
-            });
-          }
-          const compositor = new CompositeStream(
-            src,
-            (ctx, _w, _h) => {
-              // Only bake landmarks when the active preset opts in.
-              // The on-screen PiP still shows both overlays for user feedback.
-              const kind = activePresetKindRef.current;
-              if (kind === "character_swap") {
-                drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
-              } else if (kind === "gesture_fx") {
-                drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
-              }
-            },
-            { fps: 30, targetAspect: 9 / 16, targetHeight: 1920 },
-          );
-          compositorRef.current = compositor;
-        }
-      } catch (e) {
-        console.warn("compositor unavailable — clean camera only", e);
+      // Ensure the camera video has dimensions ready so a lazy compositor
+      // (built later by syncOutboundSource) can start drawing immediately.
+      const camEl = inputVideoRef.current;
+      if (camEl && camEl.readyState < 2) {
+        await new Promise<void>((resolve) => {
+          const onReady = () => {
+            camEl.removeEventListener("loadedmetadata", onReady);
+            resolve();
+          };
+          camEl.addEventListener("loadedmetadata", onReady, { once: true });
+          setTimeout(resolve, 800);
+        });
       }
+      // NOTE: the CompositeStream is intentionally NOT built here. It is
+      // constructed on demand by syncOutboundSource() only when a
+      // Character-Swap or Gesture-FX preset activates. Clean-camera presets
+      // and freeform prompts send the raw MediaStreamTrack straight to Lucy.
+
 
       // Start fal — always begin with the raw camera track. If a preset kind
       // is active, syncOutboundSource() will swap in the compositor track
@@ -1262,6 +1315,8 @@ function StagePage() {
     depthAvailable,
     depthProgress,
     toggleDepth,
+    depthStream,
+    activeSource,
   };
 
   return (

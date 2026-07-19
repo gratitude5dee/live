@@ -2,7 +2,27 @@ import SpecularButton from "@/components/reactbits/SpecularButton";
 import type { StageViewProps } from "./types";
 import type { TemplateKey } from "@/lib/zap/prompt-templates";
 import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+function DepthVideo({ stream }: { stream: MediaStream }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.srcObject = stream;
+    el.play().catch(() => {});
+  }, [stream]);
+  return (
+    <video
+      ref={ref}
+      className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100 object-cover"
+      autoPlay
+      playsInline
+      muted
+    />
+  );
+}
+
 
 export default function MobileStage(p: StageViewProps) {
   const [showQr, setShowQr] = useState(false);
@@ -88,7 +108,7 @@ export default function MobileStage(p: StageViewProps) {
 
       {/* PiP mini feed (keep mounted so inference runs) */}
       <div
-        className={`fixed left-3 z-20 h-28 w-20 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl transition ${
+        className={`fixed left-3 z-20 h-32 w-24 overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl transition ${
           showPip ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
         style={{ top: "calc(env(safe-area-inset-top) + 4rem)" }}
@@ -101,24 +121,41 @@ export default function MobileStage(p: StageViewProps) {
           playsInline
           muted
         />
+        {p.depthOn && p.depthStream && <DepthVideo stream={p.depthStream} />}
         <canvas
           ref={p.overlayRef as React.RefObject<HTMLCanvasElement>}
           className="pointer-events-none absolute inset-0 h-full w-full -scale-x-100"
         />
+        {/* Source badge */}
+        <div className="absolute left-1 top-1 rounded-full bg-black/70 px-1.5 py-0.5 text-[8px] uppercase tracking-widest backdrop-blur-xl">
+          <span className={
+            p.activeSource === "depth" ? "text-cyan-300"
+            : p.activeSource === "composite" ? "text-fuchsia-300"
+            : "text-emerald-300"
+          }>●</span>
+          <span className="ml-1 text-white/70">{p.activeSource}</span>
+        </div>
         <button
           onClick={(e) => {
             e.stopPropagation();
             p.toggleDepth();
           }}
           disabled={!p.depthAvailable || p.depthLoading}
+          title={p.depthAvailable ? "Toggle depth" : "WebGPU required — try Chrome/Edge desktop"}
           className={`absolute right-1 top-1 rounded-full px-1.5 py-0.5 text-[8px] uppercase tracking-widest backdrop-blur-xl disabled:opacity-40 ${
             p.depthOn ? "bg-cyan-400/30 text-cyan-100" : "bg-black/60 text-white/80"
           }`}
         >
-          {p.depthLoading ? `${p.depthProgress}%` : p.depthOn ? "on" : "D"}
+          {p.depthLoading
+            ? `${p.depthProgress}%`
+            : p.depthOn
+              ? "on"
+              : p.depthAvailable
+                ? "D"
+                : "n/a"}
         </button>
         {!p.facePresent && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60 text-center text-[9px] text-amber-300">
+          <div className="absolute inset-x-0 bottom-0 bg-black/70 py-0.5 text-center text-[9px] text-amber-300">
             Step in
           </div>
         )}
