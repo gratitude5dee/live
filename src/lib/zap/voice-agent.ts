@@ -135,7 +135,7 @@ export class VoiceAgent {
         instructions: COMPUTAH_INSTRUCTIONS,
         tools: COMPUTAH_TOOLS,
         tool_choice: "auto",
-        output_modalities: ["audio"],
+        output_modalities: ["text"],
         audio: {
           input: {
             turn_detection: { type: "semantic_vad" },
