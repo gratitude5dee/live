@@ -81,6 +81,7 @@ function StagePage() {
   const [pendingUpload, setPendingUpload] = useState(0);
   const [remainingMs, setRemainingMs] = useState<number | null>(null);
   const [download, setDownload] = useState<{ url: string; filename: string } | null>(null);
+  const [flipping, setFlipping] = useState(false);
   const [templateDialog, setTemplateDialog] = useState<{
     key: TemplateKey;
     name: string;
