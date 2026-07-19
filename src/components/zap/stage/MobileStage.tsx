@@ -69,9 +69,15 @@ export default function MobileStage(p: StageViewProps) {
         style={{ paddingTop: "calc(env(safe-area-inset-top) + 0.75rem)" }}
       >
         <div className="flex items-center gap-2">
-          <div className="rounded-full border border-white/10 bg-black/60 px-2.5 py-1 backdrop-blur-xl">
+          <a
+            href="https://wzrd.tech"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="WZRD.tech"
+            className="rounded-full border border-white/10 bg-black/60 px-2.5 py-1 backdrop-blur-xl"
+          >
             <img src={wzrdLogo.url} alt="WZRD" className="h-4 w-auto" />
-          </div>
+          </a>
           {p.perfMode && (
             <span className="rounded-full border border-amber-400/30 bg-amber-400/15 px-2 py-1 text-[9px] uppercase tracking-widest text-amber-200 backdrop-blur-xl">
               perf
