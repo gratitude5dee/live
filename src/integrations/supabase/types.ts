@@ -19,11 +19,13 @@ export type Database = {
           created_at: string
           emoji: string
           id: number
+          kind: string
           name: string
           prompt: string
           ref_image_url: string | null
           requires_ref: boolean
           sort_order: number
+          template_key: string | null
           thumbnail_url: string | null
           user_id: string | null
         }
@@ -31,11 +33,13 @@ export type Database = {
           created_at?: string
           emoji: string
           id?: never
+          kind?: string
           name: string
           prompt: string
           ref_image_url?: string | null
           requires_ref?: boolean
           sort_order?: number
+          template_key?: string | null
           thumbnail_url?: string | null
           user_id?: string | null
         }
@@ -43,11 +47,13 @@ export type Database = {
           created_at?: string
           emoji?: string
           id?: never
+          kind?: string
           name?: string
           prompt?: string
           ref_image_url?: string | null
           requires_ref?: boolean
           sort_order?: number
+          template_key?: string | null
           thumbnail_url?: string | null
           user_id?: string | null
         }

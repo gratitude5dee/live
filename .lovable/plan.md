@@ -1,39 +1,70 @@
-## Problems in current "Modes" section
+# Drop-image template presets
 
-- `CircularGallery` (WebGL) rotates labels with the ring so text ends up tilted and colliding with adjacent cards.
-- Cards bleed into each other with no spacing/hit targets, and the section eyebrow ("MODES" title with gradient headline) is missing — the screenshot shows just tilted images.
-- No hover interaction on the cards.
+Add a new class of presets called **templates**: the user drops a reference image (+ optional short hint) and Zap auto-writes a structured Lucy 2.5 prompt following the docs' Add / Replace patterns, then applies it to the live feed with the dropped image as the reference.
 
-## Fix
+Ship two templates first, with room to add more:
+1. **Object add-in** — drop an object/prop image → "Add \<object description\> to \<placement\>, \<physical interaction cues\>."
+2. **Clothing try-on** — drop a garment image → "Replace the person's \<garment slot\> with \<garment description from reference\>. Keep the person's identity, face, and hair unchanged."
 
-Replace the WebGL `CircularGallery` with a clean, static 3-up (desktop) / 1-up (mobile) grid of `PixelCard`s. Keep the six MODES data and captions.
+## UX
 
-### 1. Add PixelCard component (verbatim from spec, TS-safe)
-- `src/components/reactbits/PixelCard.tsx`
-- `src/components/reactbits/PixelCard.css`
-- Override the fixed 300×400 / `border-radius: 25px` / dark-only defaults from the spec CSS with a scoped modifier so the card fills its parent (`.pixel-card.pixel-card--fill { width: 100%; height: 100%; aspect-ratio: auto; border-radius: inherit; }`) — leaves the shipped component API untouched.
+In the existing preset rail (`src/routes/index.tsx` around line 1195), templates render as distinct tiles (dashed border, 📥 badge) alongside the existing image presets. Clicking a template opens a small popover/modal with:
+- a drop zone / file picker (also accepts paste)
+- one short optional field: *placement* (Object add-in) or *garment slot* (Try-on, default "top / jacket")
+- an optional *detail hint* input (e.g. "glossy leather, silver zipper")
+- an **Apply** button
 
-### 2. Rebuild `ModesSection.tsx`
-- Keep the section shell, eyebrow "Modes", gradient headline "Every reality has a lever.", and intro copy.
-- Replace the full-bleed WebGL strip with a Double-Bezel grid:
-  - Outer wrapper: `mx-auto max-w-6xl px-6`
-  - Grid: `grid gap-6 md:grid-cols-2 lg:grid-cols-3` (single-column on mobile per the design-craft mobile override).
-  - Each card:
-    - Outer shell (Doppelrand): `rounded-[2rem] p-1.5 bg-white/[0.04] ring-1 ring-white/10`
-    - Inner core: `rounded-[calc(2rem-0.375rem)] overflow-hidden bg-[#0a0a0a] aspect-[4/5]`
-    - Inside the core: `PixelCard` filling the surface with `variant` cycling through `"blue" | "pink" | "yellow" | "default"` for variety, then the mode image as a background `<img>` (`absolute inset-0 h-full w-full object-cover opacity-90 transition-transform duration-700 ease-[cubic-bezier(0.32,0.72,0,1)] group-hover:scale-[1.03]`), a bottom gradient scrim, and a bottom-left label block (`Object Add-In`, `01 / 06` eyebrow).
-    - Wrapper has `group` so pixel canvas + image both respond to hover; `PixelCard`'s own mouseenter/leave already drives the shimmer.
-  - Cards are click/tab-selectable and update the caption row below (`setActive(i)`).
-- Caption row below the grid keeps the existing `01 / 06` eyebrow + `text` + `description` (with the `key={active}` fade-in), unchanged.
+On Apply:
+- upload the image to the existing `refs` storage bucket (reuse the `savePreset` upload path), get a signed/public URL
+- build the structured prompt from the template + user inputs (see Technical section)
+- call `applyPrompt(text, "preset", { dataUri, path })` so the same reference image is sent to Lucy via `reference_image_url` and logged in `prompt_events`
+- close the modal, toast "Applied — \<template name\>"
 
-### 3. Cleanup
-- Remove the `CircularGallery` import from `ModesSection.tsx`.
-- Leave `src/components/reactbits/CircularGallery.tsx` in the tree (still used nowhere else, harmless — not deleting to avoid touching unrelated code).
+Drag-and-drop onto the whole stage while a template is "armed" is a nice-to-have; v1 uses the modal only.
 
-No changes to `LandingHero.tsx` beyond keeping `ModesSection` mounted where it already is.
+## Data
 
-## Result
+Extend the `presets` row shape with a `kind` column (`'preset' | 'template'`, default `'preset'`) and a `template_key` column (`'object_add' | 'clothing_tryon'`). Seed two rows via migration:
 
-- Cards are upright, evenly spaced, and legible with proper labels.
-- Hovering any card triggers the PixelCard shimmer overlay behind the image while the image gently scales.
-- Section flows into the "Choose your reality" rhythm above it.
+```
+kind='template', template_key='object_add',      name='Object add-in',   emoji='📦', requires_ref=true
+kind='template', template_key='clothing_tryon',  name='Try-on',          emoji='👕', requires_ref=true
+```
+
+Existing presets keep `kind='preset'` and render unchanged. `Preset` type in `src/lib/zap/types.ts` gains the two optional fields.
+
+## Prompt expansion (client-side, deterministic)
+
+New helper `src/lib/zap/prompt-templates.ts` exports:
+
+```ts
+buildTemplatePrompt(
+  key: 'object_add' | 'clothing_tryon',
+  opts: { detail?: string; placement?: string; slot?: string }
+): string
+```
+
+Following the Lucy prompting guide:
+
+- **object_add** →
+  `Add ${detail ?? 'the object from the reference image'} to ${placement ?? "the person's hand"}, attached naturally and shifting with their motion. Cast soft light on nearby skin and clothing so it feels physically present. Keep the person's identity, face, hair, and background unchanged.`
+
+- **clothing_tryon** →
+  `Replace the person's ${slot ?? 'top'} with ${detail ?? 'the garment from the reference image'}, matching its color, material, texture, fit, and any logos or trims. The garment moves with the body. Keep the person's identity, face, hair, pose, and background unchanged.`
+
+Lucy's own `enable_prompt_expansion` (already wired via the `enhance` toggle) further polishes the sentence server-side — we keep it on.
+
+## Files touched
+
+- `supabase migration` — add columns + seed two template rows + grants unchanged
+- `src/lib/zap/types.ts` — extend `Preset`
+- `src/lib/zap/prompt-templates.ts` — new
+- `src/components/zap/TemplateDialog.tsx` — new (drop zone + inputs + Apply)
+- `src/routes/index.tsx` — render template tiles, open dialog, handle apply (reuse `applyPrompt` + existing upload code from `savePreset`)
+
+Nothing else changes: the transport, recording, gestures, and existing image presets are untouched.
+
+## Out of scope (v1)
+
+- Additional templates (background swap, restyle, remove) — trivial to add later by extending `template_key` + the switch in `buildTemplatePrompt`.
+- Persisting the user's dropped image as a saved preset (already covered by the existing `＋ Save` button).
