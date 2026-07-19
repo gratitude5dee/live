@@ -267,6 +267,32 @@ function StagePage() {
     [applyPrompt, refImage, presets, loadPresetRef],
   );
 
+  const applyTemplate = useCallback(
+    async (payload: TemplateApplyPayload) => {
+      if (!transportRef.current) {
+        toast.error("Not connected yet");
+        return;
+      }
+      const uid = userIdRef.current;
+      const sid = sessionIdRef.current;
+      let path: string | undefined;
+      if (uid && sid) {
+        const key = `${uid}/${sid}/tpl-${Date.now()}.jpg`;
+        const { error: uErr } = await supabase.storage
+          .from("refs")
+          .upload(key, payload.file, { contentType: "image/jpeg", upsert: false });
+        if (!uErr) path = key;
+      }
+      const ref = { dataUri: payload.dataUri, path };
+      setRefImage(ref);
+      await applyPrompt(payload.prompt, "preset", ref);
+      toast.success("Applied");
+    },
+    [applyPrompt],
+  );
+
+
+
 
   // --- Reactive Face: fire a preset for 4s then auto-revert ---
   const triggerReactive = useCallback(
