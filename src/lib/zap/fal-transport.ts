@@ -132,7 +132,7 @@ export class VideoTransport {
         clientOnly: true,
         tokenProvider: async (app) =>
           mintFalRealtimeToken({ data: { app } }),
-        tokenExpirationSeconds: 10,
+        tokenExpirationSeconds: 120,
         onResult: (result: unknown) => {
           if (this.closed || !this.pc) return;
           const message = result as {
