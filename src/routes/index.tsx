@@ -9,6 +9,8 @@ import { FaceEngine, type FaceAction } from "@/lib/zap/face-engine";
 import { VisionBuffer } from "@/lib/zap/vision-buffer";
 import { drawHandOverlay } from "@/lib/zap/overlay";
 import { loadGestureRecognizer, loadFaceLandmarker } from "@/lib/zap/mediapipe";
+import LandingHero from "@/components/zap/LandingHero";
+import SpecularButton from "@/components/reactbits/SpecularButton";
 import {
   REACTIVE_PROMPTS,
   type ConnectionState,
@@ -834,21 +836,13 @@ function StagePage() {
       {/* Stage */}
       <main className="relative mx-auto max-w-6xl p-4">
         {connState === "idle" && (
-          <div className="flex min-h-[60vh] flex-col items-center justify-center gap-6 rounded-2xl border border-[#2A2A35] bg-gradient-to-br from-[#16161D] to-[#0A0A0F] p-12 text-center">
-            <h1 className="bg-gradient-to-r from-[#22D3EE] to-[#E879F9] bg-clip-text text-5xl font-bold text-transparent">
-              Your webcam is the timeline.
-            </h1>
-            <p className="max-w-md text-[#9CA3AF]">
-              Edit the live feed with prompts, presets, and hand gestures. Lucy 2.5
-              repaints every frame in under a second.
-            </p>
-            <button
-              onClick={startSession}
+          <div className="-mx-4 -mt-4">
+            <LandingHero
+              onEnter={() => {
+                if (authReady) startSession();
+              }}
               disabled={!authReady}
-              className="rounded-xl bg-[#22D3EE] px-6 py-3 font-semibold text-black transition hover:bg-[#67E8F9] disabled:opacity-50"
-            >
-              {authReady ? "Enable Camera" : "Loading…"}
-            </button>
+            />
           </div>
         )}
 
