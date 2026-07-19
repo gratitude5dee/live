@@ -1072,7 +1072,7 @@ function StagePage() {
       {/* Stage */}
       <main className="relative mx-auto max-w-6xl p-4">
         {(
-          <div className="relative aspect-video overflow-hidden rounded-2xl border border-[#2A2A35] bg-black">
+          <div className="relative mx-auto aspect-[9/16] max-h-[calc(100vh-220px)] w-auto overflow-hidden rounded-2xl border border-[#2A2A35] bg-black">
 
             <video
               ref={attachOutputVideo}
