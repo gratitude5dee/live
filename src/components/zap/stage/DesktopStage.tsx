@@ -142,7 +142,7 @@ export default function DesktopStage(p: StageViewProps) {
                       Templates
                     </div>
                   )}
-                  {templates.map((preset, i) => (
+                  {templates.map((preset) => (
                     <PresetRow
                       key={preset.id}
                       preset={preset}
