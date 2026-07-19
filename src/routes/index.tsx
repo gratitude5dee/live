@@ -543,6 +543,7 @@ function StagePage() {
             ctx.drawImage(v, 0, 0, w, h);
             ctx.restore();
             drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
+            drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
           }
         }
       }
