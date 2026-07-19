@@ -129,9 +129,10 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
             <ASCIIText text="Zap!" enableWaves asciiFontSize={8} planeBaseHeight={8} />
           </div>
 
-          <p className="relative z-10 mt-6 max-w-xl text-center text-base text-white/60 md:text-lg">
-            Create your reality in realtime with Zap! Built for streamers,
-            digital shop sellers, and wizards looking to bend their reality.
+          <p className="relative z-10 mt-6 max-w-xl text-center text-base whitespace-pre-line text-white/60 md:text-lg">
+            Create your reality in realtime with Zap!&nbsp;{"\n"}
+            Built for streamers, digital shop sellers, and wizards looking to&nbsp;{"\n"}
+            bend their reality.
           </p>
 
           {/* Glass CTA */}
