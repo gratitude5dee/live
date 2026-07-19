@@ -438,6 +438,7 @@ function StagePage() {
     }
     autoStopScheduledRef.current = false;
     setRemainingMs(null);
+    activePresetKindRef.current = "other";
 
     if (heartbeatRef.current) {
       clearInterval(heartbeatRef.current);
