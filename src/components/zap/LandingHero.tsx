@@ -1,4 +1,4 @@
-import Iridescence from "@/components/reactbits/Iridescence";
+import LiquidEther from "@/components/reactbits/LiquidEther";
 import Strands from "@/components/reactbits/Strands";
 import GlassSurface from "@/components/reactbits/GlassSurface";
 
@@ -10,9 +10,20 @@ interface LandingHeroProps {
 export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
   return (
     <div className="relative min-h-[100dvh] w-full overflow-hidden bg-[#050505] text-[#FAFAFA]">
-      {/* Iridescence background */}
-      <div className="pointer-events-none absolute inset-0 -z-10 opacity-70">
-        <Iridescence color={[0.35, 0.28, 0.75]} speed={0.8} amplitude={0.08} mouseReact />
+      {/* LiquidEther background */}
+      <div className="pointer-events-none absolute inset-0 -z-10">
+        <LiquidEther
+          colors={["#22d3ee", "#a855f7", "#f472b6"]}
+          mouseForce={22}
+          cursorSize={120}
+          resolution={0.5}
+          autoDemo
+          autoSpeed={0.55}
+          autoIntensity={2.4}
+          takeoverDuration={0.3}
+          autoResumeDelay={2000}
+          autoRampDuration={0.8}
+        />
       </div>
       {/* Radial vignette on top for text legibility */}
       <div
