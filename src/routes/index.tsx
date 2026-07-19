@@ -50,9 +50,11 @@ export const Route = createFileRoute("/")({
 });
 
 function StagePage() {
+  const isMobile = useIsMobile();
   const [authReady, setAuthReady] = useState(false);
   const [connState, setConnState] = useState<ConnectionState>("idle");
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<"user" | "environment">("user");
+  const [, setSessionId] = useState<string | null>(null);
   const [transport, setTransport] = useState<"webrtc" | null>(null);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [prompt, setPrompt] = useState("");
