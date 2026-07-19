@@ -896,6 +896,7 @@ function StagePage() {
               <video
                 ref={inputVideoRef}
                 className="h-full w-full -scale-x-100 object-cover"
+                autoPlay
                 playsInline
                 muted
               />
