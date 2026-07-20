@@ -652,6 +652,8 @@ function StagePage() {
   const handleGesture = useCallback(
     async (label: string, action: GestureAction) => {
       haptic("tick");
+      playSfx("toggle");
+
       const sid = sessionIdRef.current;
       const uid = userIdRef.current;
       if (sid && uid) {
