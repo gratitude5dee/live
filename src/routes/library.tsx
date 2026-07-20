@@ -466,19 +466,23 @@ function LibraryHero({
 }
 
 
-/* ---------- Control bar (filter tabs + view segmented) ---------- */
+/* ---------- Control bar (scope + filter tabs + view segmented) ---------- */
 function ControlBar({
   filter,
   setFilter,
   counts,
   view,
   setView,
+  scope,
+  setScope,
 }: {
   filter: Filter;
   setFilter: (f: Filter) => void;
   counts: { all: number; video: number; image: number };
   view: ViewMode;
   setView: (v: ViewMode) => void;
+  scope: Scope;
+  setScope: (s: Scope) => void;
 }) {
   const tabs: { k: Filter; label: string }[] = [
     { k: "all", label: "All" },
@@ -487,38 +491,71 @@ function ControlBar({
   ];
   return (
     <div className="sticky top-[76px] z-30 mx-auto w-full max-w-[1440px] px-6 md:px-10">
-      <div className="flex items-end justify-between gap-4 border-b border-white/[0.07] py-4 backdrop-blur-md">
-        <div className="flex items-end gap-6">
-          {tabs.map((t) => {
-            const active = filter === t.k;
-            return (
-              <button
-                key={t.k}
-                onClick={() => setFilter(t.k)}
-                className="group relative pb-2 text-[13px] font-medium transition-colors duration-300"
-                style={{ transitionTimingFunction: EASE }}
-              >
-                <span className={active ? "text-white" : "text-white/45 group-hover:text-white/75"}>
-                  {t.label}
-                </span>
-                <sup className={`${MONO} ml-1 text-[9px] ${active ? "text-white/50" : "text-white/25"}`}>
-                  {counts[t.k]}
-                </sup>
-                <span
-                  className={`absolute inset-x-0 -bottom-px h-px origin-left bg-white transition-transform duration-500 ${
-                    active ? "scale-x-100" : "scale-x-0"
-                  }`}
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/[0.07] py-4 backdrop-blur-md">
+        <div className="flex items-end gap-4">
+          <ScopeSegmented scope={scope} onChange={setScope} />
+          <span className="mb-2 hidden h-4 w-px bg-white/10 sm:block" />
+          <div className="flex items-end gap-6">
+            {tabs.map((t) => {
+              const active = filter === t.k;
+              return (
+                <button
+                  key={t.k}
+                  onClick={() => setFilter(t.k)}
+                  className="group relative pb-2 text-[13px] font-medium transition-colors duration-300"
                   style={{ transitionTimingFunction: EASE }}
-                />
-              </button>
-            );
-          })}
+                >
+                  <span className={active ? "text-white" : "text-white/45 group-hover:text-white/75"}>
+                    {t.label}
+                  </span>
+                  <sup className={`${MONO} ml-1 text-[9px] ${active ? "text-white/50" : "text-white/25"}`}>
+                    {counts[t.k]}
+                  </sup>
+                  <span
+                    className={`absolute inset-x-0 -bottom-px h-px origin-left bg-white transition-transform duration-500 ${
+                      active ? "scale-x-100" : "scale-x-0"
+                    }`}
+                    style={{ transitionTimingFunction: EASE }}
+                  />
+                </button>
+              );
+            })}
+          </div>
         </div>
         <ViewSegmented view={view} onChange={setView} />
       </div>
     </div>
   );
 }
+
+function ScopeSegmented({ scope, onChange }: { scope: Scope; onChange: (s: Scope) => void }) {
+  const items: { s: Scope; label: string }[] = [
+    { s: "mine", label: "Yours" },
+    { s: "global", label: "Global" },
+  ];
+  return (
+    <div className="rounded-full border border-white/10 bg-white/[0.03] p-1 backdrop-blur-xl">
+      <div className="flex items-center gap-0.5">
+        {items.map(({ s, label }) => {
+          const active = scope === s;
+          return (
+            <button
+              key={s}
+              onClick={() => onChange(s)}
+              className={`relative rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] transition-all duration-500 ${
+                active ? "bg-white text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]" : "text-white/60 hover:text-white"
+              }`}
+              style={{ transitionTimingFunction: EASE }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 
 function ViewSegmented({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode) => void }) {
   const items: { v: ViewMode; label: string; icon: React.FC<{ className?: string }> }[] = [
