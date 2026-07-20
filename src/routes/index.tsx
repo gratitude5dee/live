@@ -604,6 +604,8 @@ function StagePage() {
       }
       const promptText = REACTIVE_PROMPTS[action];
       if (!promptText || !transportRef.current) return;
+      playSfx("sparkle");
+
       // Log as face + reactive
       const sid = sessionIdRef.current;
       const uid = userIdRef.current;
