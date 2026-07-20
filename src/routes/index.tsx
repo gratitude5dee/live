@@ -19,6 +19,8 @@ import { CompositeStream } from "@/lib/zap/composite-stream";
 import { DepthEngine, WebGPUUnsupportedError } from "@/lib/zap/depth-engine";
 import { loadGestureRecognizer, loadFaceLandmarker, takeWarmedVision } from "@/lib/zap/mediapipe";
 import { haptic } from "@/lib/zap/haptics";
+import { play as playSfx } from "@/lib/sfx";
+
 import LandingHero from "@/components/zap/LandingHero";
 import TemplateDialog, { type TemplateApplyPayload } from "@/components/zap/TemplateDialog";
 import DesktopStage from "@/components/zap/stage/DesktopStage";
@@ -302,8 +304,10 @@ function StagePage() {
       depthEngineRef.current = null;
       setDepthStream(null);
       syncOutboundSource();
+      playSfx("droplet");
       return;
     }
+
     try {
       setDepthLoading(true);
       setDepthProgress(0);
@@ -327,6 +331,8 @@ function StagePage() {
       setDepthStream(engine.stream);
       syncOutboundSource();
       toast.success("Depth stream engaged");
+      playSfx("bloom");
+
     } catch (err) {
       if (err instanceof WebGPUUnsupportedError) {
         toast.error("WebGPU not available");
@@ -471,6 +477,11 @@ function StagePage() {
       setApplied(next);
       const kind = source === "preset" ? "preset" : "apply";
       void logPromptEvent(kind, source, next);
+      // Tasteful punctuation: subtle "tick" for text/voice edits, brighter
+      // "success" when a preset (or template) lands.
+      if (source === "preset") playSfx("success");
+      else if (source === "text" || source === "voice") playSfx("tick");
+
     },
     [applied, enhance, logPromptEvent, syncOutboundSource],
   );
@@ -593,6 +604,8 @@ function StagePage() {
       }
       const promptText = REACTIVE_PROMPTS[action];
       if (!promptText || !transportRef.current) return;
+      playSfx("sparkle");
+
       // Log as face + reactive
       const sid = sessionIdRef.current;
       const uid = userIdRef.current;
@@ -641,6 +654,8 @@ function StagePage() {
   const handleGesture = useCallback(
     async (label: string, action: GestureAction) => {
       haptic("tick");
+      playSfx("toggle");
+
       const sid = sessionIdRef.current;
       const uid = userIdRef.current;
       if (sid && uid) {
@@ -699,10 +714,12 @@ function StagePage() {
 
   // --- Teardown current session (manual disconnect or auto-timeout) ---
   const stopSession = useCallback(async (reason?: "manual" | "timeout") => {
+    playSfx("droplet");
     if (autoStopTimerRef.current) {
       clearTimeout(autoStopTimerRef.current);
       autoStopTimerRef.current = null;
     }
+
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
       countdownIntervalRef.current = null;
@@ -947,6 +964,8 @@ function StagePage() {
             outputVideoRef.current.play().catch(() => {});
           }
           setConnState("live");
+          playSfx("ready");
+
           // Auto-start recording in 9:16 as soon as Lucy is live
           setDownload((d) => {
             if (d) URL.revokeObjectURL(d.url);
@@ -1249,9 +1268,11 @@ function StagePage() {
       if (wasAuto) {
         const url = URL.createObjectURL(blob);
         setDownload({ url, filename });
+        playSfx("success");
       }
       uploadTake(blob, "video", dur, { autoDownload: !wasAuto, ext });
       setRecording(false);
+
     };
     recordStartRef.current = performance.now();
     try {
@@ -1264,6 +1285,8 @@ function StagePage() {
     recorderRef.current = rec;
     setRecording(true);
     haptic("record");
+    playSfx("press");
+
     // Auto-stop at 10 min for manual records
     if (!auto) {
       setTimeout(() => {
@@ -1482,6 +1505,8 @@ function StagePage() {
       setApplied(next);
     }
     toast("Reference cleared");
+    playSfx("droplet");
+
   }, [enhance]);
 
   const applyRefImage = useCallback(() => {
@@ -1671,9 +1696,13 @@ function StagePage() {
       return;
     }
     const agent = new VoiceAgent({
-      onState: setVoiceState,
+      onState: (s) => {
+        setVoiceState(s);
+        if (s === "armed") playSfx("chime");
+      },
       onTranscript: (t) => setVoiceTranscript(t),
-      onAck: (w) => setVoiceAck(w),
+      onAck: (w) => { setVoiceAck(w); playSfx("tick"); },
+
       onToolCall: handleVoiceToolCall,
       onError: (e) => {
         console.warn("voice agent error", e);
@@ -1730,6 +1759,8 @@ function StagePage() {
     if (!inputStreamRef.current) return;
     flippingRef.current = true;
     setFlipping(true);
+    playSfx("whisper");
+
     const next: "user" | "environment" = facingMode === "user" ? "environment" : "user";
     void (async () => {
       const mobileCapture = typeof window !== "undefined"

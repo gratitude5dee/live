@@ -1,6 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { downloadZip } from "client-zip";
+import { play as playSfx } from "@/lib/sfx";
+
 import { supabase } from "@/integrations/supabase/client";
 import type { TakeRow } from "@/lib/zap/types";
 import LiquidEther from "@/components/reactbits/LiquidEther";
@@ -194,7 +196,9 @@ function LibraryPage() {
     await supabase.from("takes").delete().in("id", ids);
     setTakes((prev) => prev.filter((t) => !selected.has(t.id)));
     clearSelection();
+    playSfx("droplet");
   }, [selected, takes, clearSelection]);
+
 
   const bulkDownloadSequential = useCallback(async () => {
     for (const t of selectedTakes) {
@@ -221,7 +225,9 @@ function LibraryPage() {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+    playSfx("success");
   }, [selectedTakes]);
+
 
   const deleteOne = useCallback(async (t: TakeWithUrl) => {
     if (!confirm("Delete this take?")) return;

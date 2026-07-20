@@ -1,105 +1,74 @@
-# MediaPipe / Depth → Lucy realtime — implementation plan
+## Install cuelume + wire tasteful UI SFX across ZAP-LIVE
 
-Scope covers all 7 items you flagged. Grouped by risk / surface area so we can ship in one build pass without destabilizing the live loop.
+Cuelume gives us 14 synthesized sounds with a `data-cuelume-*` API and an imperative `play()`. Goal: use it sparingly to reinforce moments the user *caused* (hover on marquee CTAs, presets applied, takes ready, errors) — never on the live-stage HUD where MediaPipe/voice already carry the feedback loop. Runs entirely client-side; SSR imports are no-ops.
 
-## Group A — spatial control (4.1)
+### 1. Install & bootstrap
+- `bun add cuelume`.
+- New `src/lib/sfx.ts`: thin wrapper around cuelume with:
+  - `initSfx()` → calls `bind()` once + reads `localStorage['zap.sfx']` (default: on) and applies `setEnabled(...)`.
+  - `setSfxEnabled(on: boolean)` → persists + `setEnabled`.
+  - `useSfxEnabled()` React hook returning `[enabled, setEnabled]`.
+  - Re-exports typed `play(name)`.
+- Call `initSfx()` from a top-level `useEffect` in `src/routes/__root.tsx` (after hydration guard so it's client-only).
 
-**Goal:** turn the index fingertip into a placement channel for add/template prompts, with no new Lucy API surface.
+### 2. Persistent mute toggle
+- Add a small speaker icon button in `BubbleMenu` (top-left cluster) — same specular styling as the logo pill. Reads `useSfxEnabled()`, toggles + plays `toggle` on activation. Tooltip: "Sound FX".
+- Muted state stored per-user in `localStorage`; respects `prefers-reduced-motion` → default off when set (users who reduce motion often want reduced audio too).
 
-- New `src/lib/zap/describe-region.ts`
-  - `describeRegion(x, y): { zone, phrase }` — 3×3 grid over normalized 0..1 coords, returns tokens like `"upper-left"`, `"center"`, `"lower-right"` plus a natural-language fragment (`"at the upper left of the frame"`).
-- `src/lib/zap/gesture-engine.ts`
-  - Expose the latest `pointingTip` (hand[8] of the highest-scoring hand, only while `Pointing_Up` is the top gesture above the confidence floor). No behavior change to fire cooldown/streak.
-- `src/routes/index.tsx` — `applyPrompt` path
-  - When the pending prompt came from a template (`kind: "object_add" | "object_replace" | "try_on"`) OR contains a `{{where}}` placeholder, and `pointingTip` is fresh (<400 ms), append the region phrase.
-  - Voice path (`voice-intent.ts` add/replace intents): same fusion — `describeRegion(tip)` fragment gets injected before send. This is what makes "Computah, put a plant there" work.
-- `src/lib/zap/prompt-templates.ts`
-  - Add optional `{{where}}` slot in the three placement-friendly templates so fusion is explicit, not a string append.
+### 3. Landing page (`LandingHero`, `ChooseReality`, `ModesSection`, `SiteFooter`) — declarative
+Restraint is the point. Only marquee elements get sound:
+- **Primary CTA "Computah! Activate"** → `data-cuelume-hover="bloom"` + `data-cuelume-press="press"` + `data-cuelume-release="release"`. Feels like arming a mic.
+- **BubbleMenu nav pills** → `data-cuelume-hover="tick"` (crisp, quiet). Cuelume already throttles hover to 1/150ms so a menu sweep stays calm.
+- **OptionWheel / ChooseReality option cards** → `data-cuelume-toggle="toggle"` on selection (mechanical click-clack matches the wheel metaphor).
+- **PixelCards in ModesSection** → `data-cuelume-hover="chime"` (only on fine-pointer devices per cuelume's own guarantee).
+- **InfiniteMenu items** → `data-cuelume-hover="sparkle"` when a new item snaps into center (imperative from the existing snap callback, not declarative, so it fires once per snap not per pointer move).
+- **Prism/Footer** → no sound. Ambience only.
 
-## Group B — depth as a first-class preset surface (4.2, 4.7)
+### 4. Live stage (`DesktopStage`, `MobileStage`) — imperative only, outcome-driven
+No hover/press sounds on the stage. Every sound corresponds to a real state change:
+- **Session connects (Lucy first frame)** → `play("ready")`.
+- **Session ends / disconnect** → `play("droplet")`.
+- **Preset applied successfully** → `play("success")` (from existing `applyPreset` after Lucy send).
+- **Template preset opens image picker** → `play("bloom")`.
+- **Reference image uploaded & applied** → `play("success")`; **cleared** → `play("droplet")`.
+- **Recording auto-start** → `play("loading")`; **recording stop + take ready** → `play("ready")`.
+- **Prompt applied via text/voice** → `play("tick")` (very subtle — reinforces the wake-word ack alongside the HUD flash).
+- **Voice wake ("Computah" detected)** → `play("sparkle")` on the client-side ACK path.
+- **Gesture fired (`onFire` in gesture engine)** → `play("toggle")` — mechanical feedback that pairs the ⌘/hand shortcut.
+- **Face reactive triggers (snapshot/confetti/etc.)** → `play("sparkle")`.
+- **Camera flip** → `play("page")` (papery flick suits the reversal).
+- **Depth toggle on** → `play("bloom")`; **off** → `play("droplet")`.
+- **Any `toast.error(...)`** → `play("error")` via a small wrapper (`toastError()` in `src/lib/sfx.ts`) used at existing error call sites; leaves untouched toasts silent.
 
-- Schema: add `input_hint text` to `presets` (nullable; `'depth' | 'raw' | null`). Grants unchanged.
-- Migration seeds 5 depth-tagged presets: `liquid chrome figure`, `hologram wireframe`, `thermal camera`, `nebula silhouette`, `topographic map`. No image refs; text-only prompts tuned for structure-only input.
-- `src/routes/index.tsx` `applyPreset`
-  - If `preset.input_hint === 'depth'` and depth is off → call `toggleDepth()` first, `await depthEngine.waitForFirstFrame()`, then send prompt. If WebGPU unavailable, toast a graceful fallback and send prompt against the raw feed.
-  - When switching to a non-depth preset, leave depth as-is (user toggle wins).
-- Preset rail (`DesktopStage.tsx`, `MobileStage.tsx`): small "DEPTH" chip badge on depth-tagged presets so the behavior is discoverable.
-- 4.7 presence + visibility pause for `DepthEngine`
-  - Add `pause()/resume()` to `DepthEngine`; loop early-returns when paused.
-  - `FaceEngine.onFacePresence(false)` → `depth.pause()`; `true` → `depth.resume()`.
-  - `document.visibilitychange` (via existing `use-page-active` hook) → same.
+Explicitly **NOT** sonified on stage: prompt keystrokes, HUD hover, PiP badges, gesture live-update ticks, sub-second heartbeat toasts, latency changes. The stage already lives in a soundscape (mic + Lucy) — SFX is only for punctuation.
 
-## Group C — depth engine perf + stability (4.3, 4.4)
+### 5. Library page (`/library`) — declarative + one outcome
+- Nav pill + tab switches → `data-cuelume-toggle="toggle"`.
+- Bento/list card **hover** → `data-cuelume-hover="chime"` (fine-pointer only).
+- Play in Cinema Feed → `data-cuelume-press="press"`.
+- Bulk **download ZIP complete** → `play("success")` at the end of the existing `client-zip` promise.
+- Delete confirmed → `play("droplet")`.
 
-`src/lib/zap/depth-engine.ts`:
+### 6. Accessibility & UX guards
+- Cuelume's built-in guarantees (fine-pointer gating, hover throttle, autoplay resume, silent no-op on failure) handle 90% of the etiquette.
+- Add our own: respect `prefers-reduced-motion` for default-off, and expose the toggle from BubbleMenu so users can flip it any time. Sound state is client-only — never blocks the app.
 
-- **Buffer reuse (4.3, main-thread pass first).** Hoist to instance fields: `paintTmpCanvas`, `paintTmpCtx`, `paintImageData` sized to model output (H×W). Reallocate only when dims change. Removes per-frame `new ImageData` + `document.createElement('canvas')`.
-- **Subsampled min/max.** Scan every 4th pixel for `min`/`max` (visually identical, ~4× cheaper). Normalization loop unchanged.
-- **Temporal EMA (4.4).** Instance `emaMin`, `emaMax` (init `null`). Each frame: `emaMin = 0.9*prev + 0.1*newMin` (same for max). Use EMA range for normalization; reset EMA on `pause()`. Kills global brightness flicker when someone crosses the background.
-- **Worker + OffscreenCanvas (4.3, phase 2).** New `src/lib/zap/depth-worker.ts`:
-  - Owns the transformers.js pipeline and the output canvas via `OffscreenCanvas.transferControlToOffscreen()`.
-  - Main thread posts `createImageBitmap(video)` each tick; worker runs inference + paint. `firstFrame` promise resolves via `postMessage`.
-  - Progress callback proxied through `postMessage` so the existing HUD download progress still works.
-  - Falls back to the current main-thread path if `OffscreenCanvas` or worker-module support is missing (older Safari).
+### 7. Files touched
+- **new** `src/lib/sfx.ts`
+- **edit** `src/routes/__root.tsx` (init on mount)
+- **edit** `src/components/reactbits/BubbleMenu.tsx` (+CSS) — add mute toggle
+- **edit** `src/components/zap/LandingHero.tsx`, `ChooseReality.tsx`, `ModesSection.tsx` — declarative attributes
+- **edit** `src/components/reactbits/InfiniteMenu.tsx` — one imperative `play("sparkle")` on snap
+- **edit** `src/routes/index.tsx` — imperative calls at the ~14 state-change sites above
+- **edit** `src/components/zap/stage/DesktopStage.tsx` + `MobileStage.tsx` — attach camera-flip / depth-toggle sounds where handlers live
+- **edit** `src/routes/library.tsx` — declarative attributes + ZIP/delete sounds
+- **package.json** — `cuelume` dependency
 
-Verification: FPS counter on the depth stream stays ≥20 while MediaPipe + compositor + Lucy WebRTC are all live; no visible pumping when someone walks in/out of frame.
+No schema, RLS, or server changes. Zero effect on the Lucy pipeline latency budget.
 
-## Group D — landmark bake hygiene (4.5)
-
-`src/lib/zap/overlay.ts` — add minimalist variants used only for the baked compositor path (PiP HUD keeps today's full skeleton/mesh):
-
-- `drawFaceOvalOnly(ctx, result, rect, { alpha: 0.15 })` — face oval connectors only, thin white.
-- `drawFingertipDots(ctx, result, rect, { alpha: 0.6 })` — dots on indices `[4, 8, 12, 16, 20]`, no bones.
-
-`src/lib/zap/composite-stream.ts` (bake path used when `bakeLandmarks` is on):
-
-- Route by active template kind:
-  - `character_swap` → `drawFaceOvalOnly` only.
-  - `gesture_fx` (and anything pointing-driven) → `drawFingertipDots` only.
-  - Otherwise → no bake (clean frame).
-
-Keeps Lucy's RGB input from ingesting cyan tessellation lines. PiP overlay code is untouched.
-
-## Group E — more blendshape triggers (4.6)
-
-`src/lib/zap/face-engine.ts`:
-
-- Extend `Trigger` with optional `combine?: (bs) => number` so multi-blendshape triggers can compose scores (average of left+right, or diff for double-blink).
-- New triggers, all sharing the existing 6 s global cooldown:
-  - `smile` — `(mouthSmileLeft + mouthSmileRight)/2 > 0.7`, 500 ms hold → action `"golden_hour"`.
-  - `double_blink` — both `eyeBlinkLeft/Right > 0.5` twice within 700 ms → action `"snapshot"`.
-  - `head_tilt` — enable `outputFacialTransformationMatrixes: true` on `FaceLandmarker`; derive roll from the 4×4; `|roll| > 15°` held 500 ms → action `"parallax"`.
-- `src/routes/index.tsx` action map:
-  - `golden_hour` → append `", golden hour lighting, warm rim light"` to current applied prompt (transient, 6 s auto-revert like existing reactive effects).
-  - `snapshot` → existing snapshot handler (already wired for gesture `Closed_Fist`).
-  - `parallax` → subtle scene-parallax prompt fragment, same transient pattern.
-
-## Files touched
-
-New:
-- `src/lib/zap/describe-region.ts`
-- `src/lib/zap/depth-worker.ts`
-- One migration: `presets.input_hint` + 5 depth preset rows.
-
-Modified:
-- `src/lib/zap/gesture-engine.ts` (expose pointing tip)
-- `src/lib/zap/face-engine.ts` (new triggers, transform matrix)
-- `src/lib/zap/depth-engine.ts` (buffer reuse, subsample, EMA, pause/resume, worker delegation + fallback)
-- `src/lib/zap/overlay.ts` (minimalist bake helpers)
-- `src/lib/zap/composite-stream.ts` (kind-aware bake selection)
-- `src/lib/zap/prompt-templates.ts` (`{{where}}` slot)
-- `src/lib/zap/voice-intent.ts` (region fusion on add/replace intents)
-- `src/routes/index.tsx` (apply-prompt fusion, depth-preset auto-toggle, presence→depth pause, new face actions)
-- `src/components/zap/stage/DesktopStage.tsx`, `MobileStage.tsx` (DEPTH badge on preset chips)
-
-Unchanged: fal-transport, voice-agent transport layer, PiP overlay visuals, RLS/grants pattern for presets.
-
-## Verification
-
-- **4.1** With a template armed, point to top-left → applied prompt string contains `"upper left"`; Lucy places the object there. Repeat via "Computah, put a plant there".
-- **4.2** Applying `Thermal camera` preset with depth off auto-enables depth, first frame arrives before send; toggling to a raw preset leaves depth as user left it.
-- **4.3** Chrome perf profile: `paintDepth` no longer shows GC spikes; with worker path enabled, main-thread scripting during depth ticks drops noticeably.
-- **4.4** Walk across background — output depth video brightness stays stable.
-- **4.5** Bake on with `character_swap`: Lucy output no longer shows cyan mesh contamination; oval-only guides still steer identity.
-- **4.6** Smile → warm relight; double-blink → snapshot fires; head-tilt → parallax fragment appears in applied prompt. Cooldown prevents overlap.
-- **4.7** Cover camera 3 s → depth engine `inFlight`/`raf` stop; uncover → resumes within one frame. Backgrounding the tab pauses too.
+### Verification
+- Load `/`, hover the CTA and menu — bloom + tick audible; sweep the menu quickly and confirm the 150 ms throttle keeps it calm.
+- Toggle the new speaker in BubbleMenu — subsequent interactions silent; localStorage key `zap.sfx=false` persists across reload.
+- Start a session: expect `ready` on first frame, `tick` on prompt apply, `toggle` on a thumbs-up gesture, `sparkle` on a "Computah" wake, `ready` when the take is downloadable, `droplet` on disconnect.
+- `/library`: hover cards, download a bulk ZIP → `success` on completion.
+- `tsgo --noEmit` clean, no bundle regressions (cuelume is <5 kB gzip).

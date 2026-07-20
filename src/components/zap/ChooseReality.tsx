@@ -191,6 +191,8 @@ export default function ChooseReality({ onEnter, disabled }: ChooseRealityProps)
                 <button
                   onClick={zap}
                   disabled={disabled}
+                  data-cuelume-hover="chime"
+                  data-cuelume-press="press"
                   className="group flex flex-1 items-center justify-between rounded-full bg-white px-5 py-3 text-sm font-semibold text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_10px_30px_rgba(0,0,0,0.35)] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white active:scale-[0.98] disabled:opacity-50"
                 >
                   <span>{disabled ? "Loading…" : "Zap this reality"}</span>
@@ -204,8 +206,10 @@ export default function ChooseReality({ onEnter, disabled }: ChooseRealityProps)
                 <button
                   onClick={shuffle}
                   aria-label="Shuffle preset"
+                  data-cuelume-toggle="toggle"
                   className="flex h-12 w-12 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/80 backdrop-blur transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white/10 hover:text-white active:scale-[0.95]"
                 >
+
                   <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M3 5h3l8 10h3" />
                     <path d="M3 15h3l2-2.5" />
