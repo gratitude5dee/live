@@ -78,14 +78,13 @@ export class GestureEngine {
       }
     }
 
-    // Expose the index-fingertip position while a pointing pose leads —
-    // powers spatial fusion for add/replace prompts (see describeRegion).
-    if (
-      bestHandIdx >= 0 &&
-      bestScore >= CONFIDENCE_THRESHOLD &&
-      (bestLabel === "Pointing_Up" || bestLabel === "Open_Palm")
-    ) {
-      const tip = result.landmarks?.[bestHandIdx]?.[8];
+    // Expose the index-fingertip position from any detected hand — casual
+    // pointing rarely classifies as `Pointing_Up`, so we fall back to the
+    // first hand's index tip whenever landmarks exist.
+    const handsLm = result.landmarks ?? [];
+    if (handsLm.length > 0) {
+      const idx = bestHandIdx >= 0 ? bestHandIdx : 0;
+      const tip = handsLm[idx]?.[8] ?? handsLm[0]?.[8];
       if (tip) {
         this.pointingTip = { x: tip.x, y: tip.y };
         this.pointingTipAt = now;

@@ -1,74 +1,43 @@
-## Install cuelume + wire tasteful UI SFX across ZAP-LIVE
+## Fixes
 
-Cuelume gives us 14 synthesized sounds with a `data-cuelume-*` API and an imperative `play()`. Goal: use it sparingly to reinforce moments the user *caused* (hover on marquee CTAs, presets applied, takes ready, errors) — never on the live-stage HUD where MediaPipe/voice already carry the feedback loop. Runs entirely client-side; SSR imports are no-ops.
+### 1. Spatial fusion (`describeRegion` never fires)
+`GestureEngine.pointingTip` only updates when MediaPipe's top gesture is `Pointing_Up` / `Open_Palm` above 0.7 confidence. In practice, casual pointing rarely classifies as `Pointing_Up` (needs index up + others curled), so the tip stays `null` and `applyPrompt`'s tipFresh check never passes — `{{where}}` and "there/here" fusion silently no-op.
 
-### 1. Install & bootstrap
-- `bun add cuelume`.
-- New `src/lib/sfx.ts`: thin wrapper around cuelume with:
-  - `initSfx()` → calls `bind()` once + reads `localStorage['zap.sfx']` (default: on) and applies `setEnabled(...)`.
-  - `setSfxEnabled(on: boolean)` → persists + `setEnabled`.
-  - `useSfxEnabled()` React hook returning `[enabled, setEnabled]`.
-  - Re-exports typed `play(name)`.
-- Call `initSfx()` from a top-level `useEffect` in `src/routes/__root.tsx` (after hydration guard so it's client-only).
+Change `src/lib/zap/gesture-engine.ts`:
+- Always read the index-fingertip landmark (`landmarks[handIdx][8]`) from the highest-scoring hand whenever `result.landmarks` is non-empty, regardless of gesture label.
+- Additionally track a `pointingActive` boolean that is true only for `Pointing_Up` (used later if we want stricter behavior), but expose `pointingTip` from any detected hand so fusion works for natural pointing.
+- Widen freshness window in `src/routes/index.tsx` from 400ms → 800ms (hand can leave frame briefly between "point" and voice/text prompt landing).
 
-### 2. Persistent mute toggle
-- Add a small speaker icon button in `BubbleMenu` (top-left cluster) — same specular styling as the logo pill. Reads `useSfxEnabled()`, toggles + plays `toggle` on activation. Tooltip: "Sound FX".
-- Muted state stored per-user in `localStorage`; respects `prefers-reduced-motion` → default off when set (users who reduce motion often want reduced audio too).
+### 2. Depth map errors → Lucy
+Two real bugs in `src/lib/zap/depth-engine.ts::paintDepth`:
 
-### 3. Landing page (`LandingHero`, `ChooseReality`, `ModesSection`, `SiteFooter`) — declarative
-Restraint is the point. Only marquee elements get sound:
-- **Primary CTA "Computah! Activate"** → `data-cuelume-hover="bloom"` + `data-cuelume-press="press"` + `data-cuelume-release="release"`. Feels like arming a mic.
-- **BubbleMenu nav pills** → `data-cuelume-hover="tick"` (crisp, quiet). Cuelume already throttles hover to 1/150ms so a menu sweep stays calm.
-- **OptionWheel / ChooseReality option cards** → `data-cuelume-toggle="toggle"` on selection (mechanical click-clack matches the wheel metaphor).
-- **PixelCards in ModesSection** → `data-cuelume-hover="chime"` (only on fine-pointer devices per cuelume's own guarantee).
-- **InfiniteMenu items** → `data-cuelume-hover="sparkle"` when a new item snaps into center (imperative from the existing snap callback, not declarative, so it fires once per snap not per pointer move).
-- **Prism/Footer** → no sound. Ambience only.
+- **No clamp on normalized grayscale.** Because `emaMin`/`emaMax` lag the raw distribution, per-frame values regularly fall outside the EMA window and `Math.round(((d-min)/range)*255)` produces negatives / >255. Written into `Uint8ClampedArray` this wraps visually into black/white noise flashes → Lucy sees garbage structure. Clamp `g` to `0..255`.
+- **EMA can invert.** When the scene changes fast (someone steps in) `emaMax` can transiently be `≤ emaMin`, making `range ≤ 0` and painting a flat frame. Guard: `range = Math.max(emaMax - emaMin, 1e-4)`; if `emaMax <= emaMin`, snap both to the raw values that frame instead of blending.
+- **Slow EMA warmup.** First few frames use raw min/max (already correct) but subsequent frames blend at α=0.1 — too slow after a real scene change. Bump α to 0.25 and reset EMA whenever raw range differs from EMA range by >2×.
 
-### 4. Live stage (`DesktopStage`, `MobileStage`) — imperative only, outcome-driven
-No hover/press sounds on the stage. Every sound corresponds to a real state change:
-- **Session connects (Lucy first frame)** → `play("ready")`.
-- **Session ends / disconnect** → `play("droplet")`.
-- **Preset applied successfully** → `play("success")` (from existing `applyPreset` after Lucy send).
-- **Template preset opens image picker** → `play("bloom")`.
-- **Reference image uploaded & applied** → `play("success")`; **cleared** → `play("droplet")`.
-- **Recording auto-start** → `play("loading")`; **recording stop + take ready** → `play("ready")`.
-- **Prompt applied via text/voice** → `play("tick")` (very subtle — reinforces the wake-word ack alongside the HUD flash).
-- **Voice wake ("Computah" detected)** → `play("sparkle")` on the client-side ACK path.
-- **Gesture fired (`onFire` in gesture engine)** → `play("toggle")` — mechanical feedback that pairs the ⌘/hand shortcut.
-- **Face reactive triggers (snapshot/confetti/etc.)** → `play("sparkle")`.
-- **Camera flip** → `play("page")` (papery flick suits the reversal).
-- **Depth toggle on** → `play("bloom")`; **off** → `play("droplet")`.
-- **Any `toast.error(...)`** → `play("error")` via a small wrapper (`toastError()` in `src/lib/sfx.ts`) used at existing error call sites; leaves untouched toasts silent.
+Rendering issue: the depth `<canvas>` is created at 720×1280 (portrait) but Lucy's WebRTC track expects the sender's declared aspect. When the source camera is landscape 1080p and we hot-swap to a portrait depth stream, the Lucy preview shows letterboxed/stretched output.
+- Fix in `DepthEngine` constructor: default `targetAspect` to match the *source video's* actual aspect at `attach()` time (resize canvas on first `tick` if `videoWidth/videoHeight` differs from the assumed aspect). Fall back to 9:16 only when the source is portrait.
 
-Explicitly **NOT** sonified on stage: prompt keystrokes, HUD hover, PiP badges, gesture live-update ticks, sub-second heartbeat toasts, latency changes. The stage already lives in a soundscape (mic + Lucy) — SFX is only for punctuation.
+### 3. Homepage SFX = one continuous drone
+The CTA button carries `data-cuelume-hover="bloom"`. `bloom` is a pad-style sustained cue; combined with the `GlassSurface` SVG-filter overlay + `GhostCursor` layer sitting near the CTA, `pointerenter` re-fires many times per second as pointer capture bounces between stacked layers, producing overlapping bloom pads that sound like one continuous tone.
 
-### 5. Library page (`/library`) — declarative + one outcome
-- Nav pill + tab switches → `data-cuelume-toggle="toggle"`.
-- Bento/list card **hover** → `data-cuelume-hover="chime"` (fine-pointer only).
-- Play in Cinema Feed → `data-cuelume-press="press"`.
-- Bulk **download ZIP complete** → `play("success")` at the end of the existing `client-zip` promise.
-- Delete confirmed → `play("droplet")`.
-
-### 6. Accessibility & UX guards
-- Cuelume's built-in guarantees (fine-pointer gating, hover throttle, autoplay resume, silent no-op on failure) handle 90% of the etiquette.
-- Add our own: respect `prefers-reduced-motion` for default-off, and expose the toggle from BubbleMenu so users can flip it any time. Sound state is client-only — never blocks the app.
-
-### 7. Files touched
-- **new** `src/lib/sfx.ts`
-- **edit** `src/routes/__root.tsx` (init on mount)
-- **edit** `src/components/reactbits/BubbleMenu.tsx` (+CSS) — add mute toggle
-- **edit** `src/components/zap/LandingHero.tsx`, `ChooseReality.tsx`, `ModesSection.tsx` — declarative attributes
-- **edit** `src/components/reactbits/InfiniteMenu.tsx` — one imperative `play("sparkle")` on snap
-- **edit** `src/routes/index.tsx` — imperative calls at the ~14 state-change sites above
-- **edit** `src/components/zap/stage/DesktopStage.tsx` + `MobileStage.tsx` — attach camera-flip / depth-toggle sounds where handlers live
-- **edit** `src/routes/library.tsx` — declarative attributes + ZIP/delete sounds
-- **package.json** — `cuelume` dependency
-
-No schema, RLS, or server changes. Zero effect on the Lucy pipeline latency budget.
+Changes:
+- Remove `data-cuelume-hover="bloom"` from the CTA in `src/components/zap/LandingHero.tsx`. Keep `data-cuelume-press`/`data-cuelume-release` only — clicks are discrete events.
+- Remove `data-cuelume-hover="chime"` from the ChooseReality preset cards (`src/components/zap/ChooseReality.tsx`) — those cards animate on mouse-move and re-trigger enters. Keep `press` + `toggle`.
+- Add a lightweight throttle in `src/lib/sfx.ts`:
+  - Wrap `play()` with a per-sound-name debounce (~180ms) so any residual rapid re-triggers coalesce.
+  - Do the same for declarative sounds by installing a capturing `pointerenter` listener that stamps `data-cuelume-*` elements and short-circuits `cuelume`'s replay via a `data-sfx-cooldown` marker (`bind()` is idempotent — safe to keep).
+- Sanity: sweep the homepage for any other `data-cuelume-hover` on animated components and downgrade to press/toggle only.
 
 ### Verification
-- Load `/`, hover the CTA and menu — bloom + tick audible; sweep the menu quickly and confirm the 150 ms throttle keeps it calm.
-- Toggle the new speaker in BubbleMenu — subsequent interactions silent; localStorage key `zap.sfx=false` persists across reload.
-- Start a session: expect `ready` on first frame, `tick` on prompt apply, `toggle` on a thumbs-up gesture, `sparkle` on a "Computah" wake, `ready` when the take is downloadable, `droplet` on disconnect.
-- `/library`: hover cards, download a bulk ZIP → `success` on completion.
-- `tsgo --noEmit` clean, no bundle regressions (cuelume is <5 kB gzip).
+- Point at the top-left of the frame, say "Computah, put a plant there" — the Lucy prompt log should show "…at the upper left of the frame".
+- Toggle depth on/off during a session — the depth PiP should stay stable in brightness during motion, and Lucy's playback should remain properly framed with no aspect distortion.
+- On the homepage, hover the CTA and preset cards — no sustained drone; only discrete press/toggle clicks produce sound.
+
+### Files touched
+- `src/lib/zap/gesture-engine.ts`
+- `src/lib/zap/depth-engine.ts`
+- `src/lib/sfx.ts`
+- `src/routes/index.tsx` (freshness window + a note on toggleDepth aspect)
+- `src/components/zap/LandingHero.tsx`
+- `src/components/zap/ChooseReality.tsx`
