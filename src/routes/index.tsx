@@ -140,6 +140,21 @@ function StagePage() {
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStopScheduledRef = useRef(false);
 
+  // --- Glass-to-glass latency tracking ---
+  // `lastPromptSentAt` = wall-clock time of the last Lucy prompt send.
+  // The output <video>'s `requestVideoFrameCallback` measures the delta
+  // to the first painted frame after that stamp; EMA-smoothed (α=0.3).
+  const lastPromptSentAtRef = useRef<number | null>(null);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const recordLatencySample = useCallback((frameMs: number) => {
+    const sent = lastPromptSentAtRef.current;
+    if (sent === null) return;
+    const dt = frameMs - sent;
+    lastPromptSentAtRef.current = null;
+    if (dt < 20 || dt > 5000) return; // ignore obvious noise
+    setLatencyMs((prev) => (prev === null ? Math.round(dt) : Math.round(prev * 0.7 + dt * 0.3)));
+  }, []);
+
   // --- Depth (WebGPU) state ---
   const [depthOn, setDepthOn] = useState(false);
   const [depthLoading, setDepthLoading] = useState(false);
