@@ -760,14 +760,17 @@ function BentoCard({
                 <IconDownload className="h-3.5 w-3.5" />
               </a>
             )}
-            <button
-              onClick={onDelete}
-              className="grid h-7 w-7 place-items-center rounded-full bg-white/5 text-white/60 ring-1 ring-white/10 transition-all duration-300 hover:bg-rose-500/20 hover:text-rose-200 hover:ring-rose-400/30"
-              style={{ transitionTimingFunction: EASE }}
-              title="Delete"
-            >
-              <IconTrash className="h-3.5 w-3.5" />
-            </button>
+            {!readOnly && (
+              <button
+                onClick={onDelete}
+                className="grid h-7 w-7 place-items-center rounded-full bg-white/5 text-white/60 ring-1 ring-white/10 transition-all duration-300 hover:bg-rose-500/20 hover:text-rose-200 hover:ring-rose-400/30"
+                style={{ transitionTimingFunction: EASE }}
+                title="Delete"
+              >
+                <IconTrash className="h-3.5 w-3.5" />
+              </button>
+            )}
+
           </div>
         </div>
       </div>
