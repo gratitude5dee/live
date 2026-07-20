@@ -1339,6 +1339,8 @@ function StagePage() {
     let hideTimer: ReturnType<typeof setTimeout> | null = null;
     const onVisibility = () => {
       if (document.hidden) {
+        // Depth inference is heavy — pause immediately when the tab is hidden.
+        depthEngineRef.current?.pause();
         hideTimer = setTimeout(() => {
           transportRef.current?.setOutboundPaused(true);
         }, 60_000);
@@ -1346,6 +1348,7 @@ function StagePage() {
         if (hideTimer) clearTimeout(hideTimer);
         hideTimer = null;
         transportRef.current?.setOutboundPaused(false);
+        if (facePresentRef.current) depthEngineRef.current?.resume();
       }
     };
     document.addEventListener("visibilitychange", onVisibility);
