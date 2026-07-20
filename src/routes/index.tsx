@@ -1000,12 +1000,12 @@ function StagePage() {
       blob: Blob,
       kind: "video" | "snapshot",
       durationMs?: number,
-      opts?: { autoDownload?: boolean },
+      opts?: { autoDownload?: boolean; ext?: string },
     ) => {
       const uid = userIdRef.current;
       const sid = sessionIdRef.current;
       if (!uid || !sid) return;
-      const ext = kind === "video" ? "webm" : "png";
+      const ext = opts?.ext ?? (kind === "video" ? "webm" : "png");
       const bucket = "takes";
       const filename = `take-${Date.now()}.${ext}`;
       const path = `${uid}/${sid}/${filename}`;
