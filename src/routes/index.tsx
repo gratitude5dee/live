@@ -920,6 +920,20 @@ function StagePage() {
             .eq("id", session.id)
             .then(() => {});
         },
+        onStateChange: (s) => {
+          if (s === "reconnecting") {
+            setConnState("reconnecting");
+            toast.loading("Reconnecting to Lucy…", { id: "lucy-reconnect" });
+          } else if (s === "connected") {
+            toast.dismiss("lucy-reconnect");
+            // If we were mid-reconnect, restore the "live" pill.
+            if (transportStateRef.current) setConnState("live");
+          } else if (s === "failed") {
+            toast.dismiss("lucy-reconnect");
+            toast.error("Lost connection to Lucy");
+            setConnState("failed");
+          }
+        },
         onError: (e) => {
           console.error("fal error", e);
           setError(String((e as Error)?.message ?? e));
