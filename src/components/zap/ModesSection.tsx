@@ -57,7 +57,6 @@ export default function ModesSection() {
   const [active, setActive] = useState<InfiniteMenuItem>(MODES[0]);
   const onActive = useCallback((it: InfiniteMenuItem) => {
     setActive(it);
-    void import("@/lib/sfx").then(({ play }) => play("sparkle"));
   }, []);
 
 
