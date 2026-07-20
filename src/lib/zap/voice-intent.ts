@@ -31,6 +31,23 @@ export const ACK_LEXICON = [
   "Hella",
 ] as const;
 
+export function pickAck(): string {
+  return ACK_LEXICON[Math.floor(Math.random() * ACK_LEXICON.length)];
+}
+
+/** Short rotating hints shown in the HUD while Computah is armed. */
+export const HUD_HINTS: readonly string[] = [
+  'try: "Computah, put me on Mars"',
+  'try: "Computah, give me a gold crown"',
+  'try: "Computah, make my jacket red"',
+  'try: "Computah, undo"',
+  'try: "Computah, record"',
+  'try: "Computah, flip camera"',
+  'try: "Computah, clear"',
+  'try: "Computah, restyle as anime"',
+  'try: "Computah, use the reference"',
+];
+
 export type EditTypeId =
   | "character_transformation"
   | "add_object"
