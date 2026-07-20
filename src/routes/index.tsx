@@ -1613,6 +1613,7 @@ function StagePage() {
       // Swap in the new stream, then stop the old tracks.
       const old = inputStreamRef.current;
       inputStreamRef.current = newStream;
+      setInputStream(newStream);
       if (inputVideoRef.current) {
         inputVideoRef.current.srcObject = newStream;
         inputVideoRef.current.play().catch(() => {});
