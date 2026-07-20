@@ -786,6 +786,7 @@ function LedgerList({
   onSelectAll,
   onClearSelection,
   onDelete,
+  readOnly,
 }: {
   takes: TakeWithUrl[];
   selected: Set<number>;
@@ -793,7 +794,9 @@ function LedgerList({
   onSelectAll: () => void;
   onClearSelection: () => void;
   onDelete: (t: TakeWithUrl) => void;
+  readOnly?: boolean;
 }) {
+
   const allSel = takes.length > 0 && takes.every((t) => selected.has(t.id));
   return (
     <div className="mt-8 overflow-hidden rounded-[1.5rem] border border-white/[0.08] bg-black/40 backdrop-blur-xl">
