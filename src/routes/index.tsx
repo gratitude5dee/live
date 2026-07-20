@@ -897,6 +897,9 @@ function StagePage() {
           setFacePresent(present);
           // Pause outbound frames on no-face; resume on face-back
           transportRef.current?.setOutboundPaused(!present);
+          // Depth inference is expensive — pause with the presence signal.
+          if (present) depthEngineRef.current?.resume();
+          else depthEngineRef.current?.pause();
         };
         faceEngineRef.current = fe;
       } catch (e) {
