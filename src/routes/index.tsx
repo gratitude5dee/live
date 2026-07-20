@@ -1268,9 +1268,11 @@ function StagePage() {
       if (wasAuto) {
         const url = URL.createObjectURL(blob);
         setDownload({ url, filename });
+        playSfx("shimmer");
       }
       uploadTake(blob, "video", dur, { autoDownload: !wasAuto, ext });
       setRecording(false);
+
     };
     recordStartRef.current = performance.now();
     try {
@@ -1283,6 +1285,8 @@ function StagePage() {
     recorderRef.current = rec;
     setRecording(true);
     haptic("record");
+    playSfx("press");
+
     // Auto-stop at 10 min for manual records
     if (!auto) {
       setTimeout(() => {
