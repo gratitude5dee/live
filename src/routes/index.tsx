@@ -232,7 +232,7 @@ function StagePage() {
       }
     }
     const track = src?.getVideoTracks()[0] ?? null;
-    if (track) void transport.replaceVideoTrack(track);
+    if (track) void transport.replaceVideoTrack(track, { kind: label === "depth" ? "detail" : "motion" });
     setActiveSource(label);
   }, [ensureCompositor, disposeCompositor]);
 
