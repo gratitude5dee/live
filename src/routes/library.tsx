@@ -891,12 +891,15 @@ function CinemaFeed({
   selected,
   onToggle,
   onDelete,
+  readOnly,
 }: {
   takes: TakeWithUrl[];
   selected: Set<number>;
   onToggle: (id: number) => void;
   onDelete: (t: TakeWithUrl) => void;
+  readOnly?: boolean;
 }) {
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
   const [muted, setMuted] = useState(true);
