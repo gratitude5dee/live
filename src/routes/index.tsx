@@ -105,6 +105,8 @@ function StagePage() {
   const outputVideoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const inputStreamRef = useRef<MediaStream | null>(null);
+  // Mirror for consumers that need reactive access (A/B wipe).
+  const [inputStream, setInputStream] = useState<MediaStream | null>(null);
   const outputStreamRef = useRef<MediaStream | null>(null);
   const compositorRef = useRef<CompositeStream | null>(null);
   // Route MediaPipe baking based on the active preset's category:
