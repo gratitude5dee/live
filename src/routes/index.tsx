@@ -698,6 +698,7 @@ function StagePage() {
     visionBufRef.current = null;
     inputStreamRef.current?.getTracks().forEach((t) => t.stop());
     inputStreamRef.current = null;
+    setInputStream(null);
     compositorRef.current?.stop();
     compositorRef.current = null;
     depthEngineRef.current?.stop();
