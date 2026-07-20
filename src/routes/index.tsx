@@ -1468,7 +1468,7 @@ function StagePage() {
               toggleRecord();
               break;
             case "flip_camera":
-              flipCamera();
+              flipCameraRef.current();
               break;
             case "stop_session":
               await stopSession("manual");
