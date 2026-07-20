@@ -1049,18 +1049,22 @@ function StagePage() {
             if (oc.height !== targetH) oc.height = targetH;
             const ctx = oc.getContext("2d");
             if (ctx) {
-              ctx.save();
               ctx.clearRect(0, 0, targetW, targetH);
-              // Object-cover: scale to fill and center-crop
+              // Match the <video> element's object-cover crop so landmarks
+              // (normalized to the raw video) land on the same pixels the
+              // user sees underneath the transparent overlay canvas.
               const vw = v.videoWidth;
               const vh = v.videoHeight;
-              const s = Math.max(targetW / vw, targetH / vh);
-              const dw = vw * s;
-              const dh = vh * s;
-              ctx.drawImage(v, (targetW - dw) / 2, (targetH - dh) / 2, dw, dh);
-              ctx.restore();
-              drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
-              drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+              if (vw > 0 && vh > 0) {
+                const s = Math.max(targetW / vw, targetH / vh);
+                const dw = vw * s;
+                const dh = vh * s;
+                const dx = (targetW - dw) / 2;
+                const dy = (targetH - dh) / 2;
+                const rect = { dx, dy, dw, dh };
+                drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current, rect);
+                drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null, rect);
+              }
             }
           }
         }
