@@ -477,6 +477,11 @@ function StagePage() {
       setApplied(next);
       const kind = source === "preset" ? "preset" : "apply";
       void logPromptEvent(kind, source, next);
+      // Tasteful punctuation: subtle "tick" for text/voice edits, brighter
+      // "success" when a preset (or template) lands.
+      if (source === "preset") playSfx("success");
+      else if (source === "text" || source === "voice") playSfx("tick");
+
     },
     [applied, enhance, logPromptEvent, syncOutboundSource],
   );
