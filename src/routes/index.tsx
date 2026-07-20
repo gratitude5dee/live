@@ -771,6 +771,7 @@ function StagePage() {
 
 
       inputStreamRef.current = stream;
+      setInputStream(stream);
       if (inputVideoRef.current) {
         inputVideoRef.current.srcObject = stream;
         inputVideoRef.current.play().catch(() => {});
