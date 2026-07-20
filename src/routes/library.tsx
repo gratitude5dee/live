@@ -1178,7 +1178,8 @@ function CommandBar({
 }
 
 /* ---------- Empty state ---------- */
-function EmptyPlate() {
+function EmptyPlate({ scope }: { scope: Scope }) {
+  const isGlobal = scope === "global";
   return (
     <div className="relative mx-auto mt-16 max-w-3xl overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.02] p-16 text-center">
       <div
@@ -1188,13 +1189,17 @@ function EmptyPlate() {
       </div>
       <div className="relative z-10 flex flex-col items-center gap-4">
         <span className={`${MONO} text-[10px] uppercase tracking-[0.34em] text-white/40`}>
-          [ ARCHIVE ]
+          [ {isGlobal ? "GLOBAL FEED" : "ARCHIVE"} ]
         </span>
-        <h2 className="text-3xl font-semibold tracking-[-0.02em] md:text-5xl">The archive is empty.</h2>
+        <h2 className="text-3xl font-semibold tracking-[-0.02em] md:text-5xl">
+          {isGlobal ? "Nothing to see yet." : "The archive is empty."}
+        </h2>
         <p className="max-w-md text-sm text-white/55">
-          Go live once and Zap will auto-record your session in portrait 9:16. It'll land here the
-          moment it uploads.
+          {isGlobal
+            ? "No one has recorded a take yet. Be the first — go live and Zap will upload it here for everyone."
+            : "Go live once and Zap will auto-record your session in portrait 9:16. It'll land here the moment it uploads."}
         </p>
+
         <Link
           to="/"
           className="group mt-4 flex items-center gap-1.5 rounded-full bg-white py-2 pl-5 pr-2 text-[11px] uppercase tracking-[0.24em] text-black transition-all duration-400 active:scale-[0.98]"
