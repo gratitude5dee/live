@@ -120,3 +120,51 @@ export function drawFaceOverlay(
     strokeConnectors(ctx, landmarks, FaceLandmarker.FACE_LANDMARKS_RIGHT_EYEBROW as readonly Conn[], "#67E8F9", 1.2, 0.8, r);
   }
 }
+
+/**
+ * Minimal face-oval-only overlay for the baked-compositor path. Full
+ * tessellation would contaminate Lucy's RGB input; the oval is enough to
+ * steer character_swap presets without visible mesh artifacts.
+ */
+export function drawFaceOvalOnly(
+  ctx: CanvasRenderingContext2D,
+  result: FaceLandmarkerResult | null,
+  rect?: OverlayRect,
+  opts: { alpha?: number } = {},
+) {
+  if (!result || !result.faceLandmarks?.length) return;
+  const r = rectFromCanvas(ctx, rect);
+  const alpha = opts.alpha ?? 0.15;
+  for (const landmarks of result.faceLandmarks) {
+    strokeConnectors(ctx, landmarks, FaceLandmarker.FACE_LANDMARKS_FACE_OVAL as readonly Conn[], "#FAFAFA", 1.5, alpha, r);
+  }
+}
+
+/**
+ * Fingertip-only overlay for the baked-compositor path — bones removed so
+ * Lucy can't accidentally render cyan skeleton lines onto the output.
+ */
+export function drawFingertipDots(
+  ctx: CanvasRenderingContext2D,
+  result: GestureRecognizerResult | null,
+  rect?: OverlayRect,
+  opts: { alpha?: number } = {},
+) {
+  if (!result || !result.landmarks?.length) return;
+  const { dx, dy, dw, dh } = rectFromCanvas(ctx, rect);
+  const alpha = opts.alpha ?? 0.6;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = "#FAFAFA";
+  for (const hand of result.landmarks) {
+    for (const idx of [4, 8, 12, 16, 20]) {
+      const p = hand[idx];
+      if (!p) continue;
+      ctx.beginPath();
+      ctx.arc(dx + p.x * dw, dy + p.y * dh, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.restore();
+}
+

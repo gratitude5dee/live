@@ -7,7 +7,14 @@ import { VideoTransport } from "@/lib/zap/fal-transport";
 import { GestureEngine, type GestureAction } from "@/lib/zap/gesture-engine";
 import { FaceEngine, type FaceAction } from "@/lib/zap/face-engine";
 import { VisionBuffer } from "@/lib/zap/vision-buffer";
-import { drawHandOverlay, drawFaceOverlay } from "@/lib/zap/overlay";
+import {
+  drawHandOverlay,
+  drawFaceOverlay,
+  drawFaceOvalOnly,
+  drawFingertipDots,
+} from "@/lib/zap/overlay";
+import { describeRegion } from "@/lib/zap/describe-region";
+import { fillWhere } from "@/lib/zap/prompt-templates";
 import { CompositeStream } from "@/lib/zap/composite-stream";
 import { DepthEngine, WebGPUUnsupportedError } from "@/lib/zap/depth-engine";
 import { loadGestureRecognizer, loadFaceLandmarker, takeWarmedVision } from "@/lib/zap/mediapipe";
@@ -219,11 +226,13 @@ function StagePage() {
       const compositor = new CompositeStream(
         src,
         (ctx) => {
+          // Use minimalist bake variants so Lucy's RGB input isn't
+          // contaminated with cyan tessellation/skeleton lines.
           const kind = activePresetKindRef.current;
           if (kind === "character_swap") {
-            drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+            drawFaceOvalOnly(ctx, faceEngineRef.current?.lastResult ?? null);
           } else if (kind === "gesture_fx") {
-            drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
+            drawFingertipDots(ctx, lastGestureResultRef.current);
           }
         },
         { fps: 30, targetAspect: 9 / 16, targetHeight: 1920 },
@@ -407,12 +416,35 @@ function StagePage() {
       // Free-text / gesture / face / remote prompts should not bake MediaPipe
       // into Lucy's input — only preset apply paths can opt into that.
       if (source !== "preset") activePresetKindRef.current = "other";
+
+      // --- Spatial fusion: fill any {{where}} slot from the pointing tip ---
+      // For voice/text edits we also opportunistically inject a region phrase
+      // when the user is pointing (fresh <400ms) and the prompt contains the
+      // deictic "there" / "here" — makes "Computah, put a plant there" work.
+      let fusedText = text;
+      const eng = engineRef.current;
+      const tipFresh =
+        eng?.pointingTip && performance.now() - eng.pointingTipAt < 400
+          ? eng.pointingTip
+          : null;
+      if (fusedText.includes("{{where}}")) {
+        const phrase = tipFresh ? describeRegion(tipFresh.x, tipFresh.y).phrase : null;
+        fusedText = fillWhere(fusedText, phrase);
+      } else if (
+        tipFresh &&
+        (source === "voice" || source === "text") &&
+        /\b(there|here)\b/i.test(fusedText)
+      ) {
+        const { phrase } = describeRegion(tipFresh.x, tipFresh.y);
+        fusedText = `${fusedText.trimEnd().replace(/[.!?]$/, "")}, ${phrase}.`;
+      }
+
       // Prefer a remote URL for ref_image — it's ~100 bytes vs ~400KB base64
       // over the WS on each apply/undo/reactive-revert.
       const refUrl = ref?.url;
       const refImageForLucy = refUrl ?? ref?.dataUri;
       const next: PromptState = {
-        text,
+        text: fusedText,
         refImage: ref?.dataUri,
         refUrl,
         refPath: ref?.path,
@@ -430,7 +462,7 @@ function StagePage() {
       // log — every ms we save here is a ms sooner Lucy starts repainting.
       lastPromptSentAtRef.current = performance.now();
       transportRef.current.send({
-        prompt: text,
+        prompt: fusedText,
         enable_prompt_expansion: expand,
         reference_image_url: refImageForLucy,
       });
@@ -491,9 +523,24 @@ function StagePage() {
           : preset.template_key === "gesture_fx"
           ? "gesture_fx"
           : "other";
+      // Depth-tagged presets need the WebGPU depth stream as Lucy's input.
+      // Auto-enable when off; if WebGPU is unavailable, fall through and let
+      // the prompt run against the raw camera feed.
+      const hint = (preset as unknown as { input_hint?: string | null }).input_hint;
+      if (hint === "depth" && !depthOnRef.current) {
+        if (depthAvailable) {
+          try {
+            await toggleDepth();
+          } catch (e) {
+            console.warn("depth auto-toggle failed", e);
+          }
+        } else {
+          toast("Depth needs WebGPU — running on raw feed");
+        }
+      }
       await applyPrompt(preset.prompt, source, ref, { preset });
     },
-    [applyPrompt, refImage, presets, loadPresetRef],
+    [applyPrompt, refImage, presets, loadPresetRef, depthAvailable, toggleDepth],
   );
 
   const applyTemplate = useCallback(
@@ -535,8 +582,15 @@ function StagePage() {
 
 
   // --- Reactive Face: fire a preset for 4s then auto-revert ---
+  // snapshot is declared later — hop through a ref to avoid a TDZ.
+  const snapshotRef = useRef<() => Promise<void>>(async () => {});
   const triggerReactive = useCallback(
     async (action: FaceAction, label: string, score: number) => {
+      // Double-blink → snapshot instead of prompt swap.
+      if (action === "snapshot") {
+        void snapshotRef.current();
+        return;
+      }
       const promptText = REACTIVE_PROMPTS[action];
       if (!promptText || !transportRef.current) return;
       // Log as face + reactive
@@ -850,6 +904,9 @@ function StagePage() {
           setFacePresent(present);
           // Pause outbound frames on no-face; resume on face-back
           transportRef.current?.setOutboundPaused(!present);
+          // Depth inference is expensive — pause with the presence signal.
+          if (present) depthEngineRef.current?.resume();
+          else depthEngineRef.current?.pause();
         };
         faceEngineRef.current = fe;
       } catch (e) {
@@ -1142,6 +1199,8 @@ function StagePage() {
       if (blob) uploadTake(blob, "snapshot");
     }, "image/png");
   }, [uploadTake]);
+  useEffect(() => { snapshotRef.current = snapshot; }, [snapshot]);
+
 
   const startRecording = useCallback((auto: boolean) => {
     if (recorderRef.current?.state === "recording") return;
@@ -1289,6 +1348,8 @@ function StagePage() {
     let hideTimer: ReturnType<typeof setTimeout> | null = null;
     const onVisibility = () => {
       if (document.hidden) {
+        // Depth inference is heavy — pause immediately when the tab is hidden.
+        depthEngineRef.current?.pause();
         hideTimer = setTimeout(() => {
           transportRef.current?.setOutboundPaused(true);
         }, 60_000);
@@ -1296,6 +1357,7 @@ function StagePage() {
         if (hideTimer) clearTimeout(hideTimer);
         hideTimer = null;
         transportRef.current?.setOutboundPaused(false);
+        if (facePresentRef.current) depthEngineRef.current?.resume();
       }
     };
     document.addEventListener("visibilitychange", onVisibility);

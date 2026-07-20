@@ -452,7 +452,9 @@ function MobilePresetTile({
 }) {
   const kind = (preset as unknown as { kind?: string }).kind ?? "preset";
   const templateKey = (preset as unknown as { template_key?: TemplateKey }).template_key;
+  const inputHint = (preset as unknown as { input_hint?: string | null }).input_hint;
   const isTemplate = kind === "template" && !!templateKey;
+  const isDepth = inputHint === "depth";
   const disabled = !isTemplate && preset.requires_ref && !preset.ref_image_url && !refImage;
 
   return (
@@ -462,7 +464,9 @@ function MobilePresetTile({
       className={`relative flex h-16 w-16 shrink-0 snap-start flex-col items-center justify-center overflow-hidden rounded-2xl border backdrop-blur-xl transition disabled:opacity-30 active:scale-95 ${
         isTemplate
           ? "border-dashed border-fuchsia-400/60 bg-black/60"
-          : "border-white/10 bg-black/60"
+          : isDepth
+            ? "border-emerald-300/50 bg-black/60"
+            : "border-white/10 bg-black/60"
       }`}
       title={preset.name}
     >
@@ -475,6 +479,11 @@ function MobilePresetTile({
       <span className="relative z-10 mt-0.5 max-w-[3.5rem] truncate text-[9px] text-white/80">
         {preset.name}
       </span>
+      {isDepth && (
+        <span className="absolute right-1 top-1 z-20 rounded-full bg-emerald-400/20 px-1 text-[7px] font-semibold text-emerald-200">
+          D
+        </span>
+      )}
     </button>
   );
 }

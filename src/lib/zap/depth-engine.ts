@@ -45,10 +45,21 @@ export class DepthEngine {
   private raf: number | null = null;
   private inFlight = false;
   private stopped = false;
+  private paused = false;
   private source: HTMLVideoElement | null = null;
   private opts: Required<DepthAttachOptions>;
   private firstFrameResolve: (() => void) | null = null;
   readonly firstFrame: Promise<void>;
+  // Hoisted paint buffers — reused across frames to avoid ~24Hz allocation
+  // churn. Reallocated only when the model output dimensions change.
+  private paintTmpCanvas: HTMLCanvasElement | null = null;
+  private paintTmpCtx: CanvasRenderingContext2D | null = null;
+  private paintImageData: ImageData | null = null;
+  private paintDims: { w: number; h: number } | null = null;
+  // Temporal EMA on min/max keeps background brightness stable when someone
+  // walks across the scene (per-frame normalization otherwise pumps).
+  private emaMin: number | null = null;
+  private emaMax: number | null = null;
 
 
   constructor(opts: DepthAttachOptions = {}) {
@@ -116,10 +127,20 @@ export class DepthEngine {
     if (this.raf === null) this.raf = requestAnimationFrame(this.loop);
   }
 
+  /** Pause inference without tearing down the pipeline — cheap to resume. */
+  pause() {
+    this.paused = true;
+    this.emaMin = null;
+    this.emaMax = null;
+  }
+  resume() {
+    this.paused = false;
+  }
+
   private loop = () => {
     if (this.stopped) return;
     this.raf = requestAnimationFrame(this.loop);
-    void this.tick();
+    if (!this.paused) void this.tick();
   };
 
   private async tick() {
@@ -155,29 +176,46 @@ export class DepthEngine {
     // dims: [H, W] or [1, H, W]
     const h = dims[dims.length - 2];
     const w = dims[dims.length - 1];
-    let min = Infinity;
-    let max = -Infinity;
-    for (let i = 0; i < data.length; i++) {
+
+    // Subsampled min/max scan (every 4th pixel is visually identical, ~4x cheaper).
+    let rawMin = Infinity;
+    let rawMax = -Infinity;
+    for (let i = 0; i < data.length; i += 4) {
       const d = data[i];
-      if (d < min) min = d;
-      if (d > max) max = d;
+      if (d < rawMin) rawMin = d;
+      if (d > rawMax) rawMax = d;
     }
-    const range = max - min || 1;
-    const src = new ImageData(w, h);
+    if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return;
+    // Temporal EMA — kills the "walk-through-frame" brightness pump.
+    const alpha = 0.1;
+    this.emaMin = this.emaMin === null ? rawMin : this.emaMin * (1 - alpha) + rawMin * alpha;
+    this.emaMax = this.emaMax === null ? rawMax : this.emaMax * (1 - alpha) + rawMax * alpha;
+    const min = this.emaMin;
+    const range = (this.emaMax - this.emaMin) || 1;
+
+    // Hoisted paint buffers — only reallocated when output dims change.
+    if (!this.paintDims || this.paintDims.w !== w || this.paintDims.h !== h) {
+      const tmp = document.createElement("canvas");
+      tmp.width = w;
+      tmp.height = h;
+      const tctx = tmp.getContext("2d");
+      if (!tctx) return;
+      this.paintTmpCanvas = tmp;
+      this.paintTmpCtx = tctx;
+      this.paintImageData = new ImageData(w, h);
+      this.paintDims = { w, h };
+    }
+    const src = this.paintImageData!;
+    const sd = src.data;
     for (let i = 0; i < data.length; i++) {
-      // Depth Anything outputs "closer = larger". Map to white=near, black=far.
       const g = Math.round(((data[i] - min) / range) * 255);
       const j = i * 4;
-      src.data[j] = g;
-      src.data[j + 1] = g;
-      src.data[j + 2] = g;
-      src.data[j + 3] = 255;
+      sd[j] = g;
+      sd[j + 1] = g;
+      sd[j + 2] = g;
+      sd[j + 3] = 255;
     }
-    // Blit onto output canvas center-cropped to portrait aspect.
-    const tmp = document.createElement("canvas");
-    tmp.width = w;
-    tmp.height = h;
-    tmp.getContext("2d")!.putImageData(src, 0, 0);
+    this.paintTmpCtx!.putImageData(src, 0, 0);
     const cw = this.canvas.width;
     const ch = this.canvas.height;
     const s = Math.max(cw / w, ch / h);
@@ -189,7 +227,7 @@ export class DepthEngine {
     this.ctx.fillRect(0, 0, cw, ch);
     this.ctx.imageSmoothingEnabled = true;
     this.ctx.imageSmoothingQuality = "high";
-    this.ctx.drawImage(tmp, ox, oy, outW, outH);
+    this.ctx.drawImage(this.paintTmpCanvas!, ox, oy, outW, outH);
     if (this.firstFrameResolve) {
       this.firstFrameResolve();
       this.firstFrameResolve = null;

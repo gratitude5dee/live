@@ -555,7 +555,9 @@ function PresetRow({
 }) {
   const kind = (preset as unknown as { kind?: string }).kind ?? "preset";
   const templateKey = (preset as unknown as { template_key?: TemplateKey }).template_key;
+  const inputHint = (preset as unknown as { input_hint?: string | null }).input_hint;
   const isTemplate = kind === "template" && !!templateKey;
+  const isDepth = inputHint === "depth";
   const disabled = !isTemplate && preset.requires_ref && !preset.ref_image_url && !refImage;
 
   return (
@@ -565,9 +567,11 @@ function PresetRow({
       className={`group flex h-11 w-full shrink-0 items-center gap-2.5 rounded-xl border pl-1 pr-2.5 text-left transition disabled:opacity-30 ${
         isTemplate
           ? "border-dashed border-fuchsia-400/40 hover:border-fuchsia-400/80 hover:bg-fuchsia-400/[0.04]"
-          : "border-white/10 hover:border-cyan-300/40 hover:bg-white/[0.04]"
+          : isDepth
+            ? "border-emerald-300/30 hover:border-emerald-300/70 hover:bg-emerald-300/[0.04]"
+            : "border-white/10 hover:border-cyan-300/40 hover:bg-white/[0.04]"
       }`}
-      title={`${preset.name}${index < 9 ? ` (⌘${index + 1})` : ""}`}
+      title={`${preset.name}${index < 9 ? ` (⌘${index + 1})` : ""}${isDepth ? " — depth input" : ""}`}
     >
       {preset.thumbnail_url ? (
         <img
@@ -585,10 +589,10 @@ function PresetRow({
       </span>
       <span
         className={`shrink-0 text-[10px] tabular-nums ${
-          isTemplate ? "text-fuchsia-300/70" : "text-white/30"
+          isTemplate ? "text-fuchsia-300/70" : isDepth ? "text-emerald-300/80" : "text-white/30"
         }`}
       >
-        {isTemplate ? "＋img" : index < 9 ? `⌘${index + 1}` : ""}
+        {isTemplate ? "＋img" : isDepth ? "DEPTH" : index < 9 ? `⌘${index + 1}` : ""}
       </span>
     </button>
   );

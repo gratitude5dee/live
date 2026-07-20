@@ -47,6 +47,13 @@ export class GestureEngine {
     lastFiredLabel: null,
   };
 
+  /** Latest index-fingertip position (normalized 0..1) of the highest-scoring
+   *  pointing hand. `null` when no hand is above CONFIDENCE_THRESHOLD or the
+   *  top gesture isn't a pointing pose. Freshness is caller-managed via
+   *  `pointingTipAt` (performance.now stamp). */
+  pointingTip: { x: number; y: number } | null = null;
+  pointingTipAt = 0;
+
   onFire: ((label: string, action: GestureAction, score: number) => void) | null =
     null;
 
@@ -54,16 +61,34 @@ export class GestureEngine {
     | ((label: string | null, score: number, holdProgress: number) => void)
     | null = null;
 
+
   ingest(result: GestureRecognizerResult) {
     const now = performance.now();
     // Pick highest-score gesture across hands
     let bestLabel: string | null = null;
     let bestScore = 0;
-    for (const hand of result.gestures ?? []) {
-      const top = hand[0];
+    let bestHandIdx = -1;
+    const gestures = result.gestures ?? [];
+    for (let i = 0; i < gestures.length; i++) {
+      const top = gestures[i][0];
       if (top && top.score > bestScore) {
         bestScore = top.score;
         bestLabel = top.categoryName;
+        bestHandIdx = i;
+      }
+    }
+
+    // Expose the index-fingertip position while a pointing pose leads —
+    // powers spatial fusion for add/replace prompts (see describeRegion).
+    if (
+      bestHandIdx >= 0 &&
+      bestScore >= CONFIDENCE_THRESHOLD &&
+      (bestLabel === "Pointing_Up" || bestLabel === "Open_Palm")
+    ) {
+      const tip = result.landmarks?.[bestHandIdx]?.[8];
+      if (tip) {
+        this.pointingTip = { x: tip.x, y: tip.y };
+        this.pointingTipAt = now;
       }
     }
 
