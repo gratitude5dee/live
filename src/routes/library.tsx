@@ -120,6 +120,10 @@ function LibraryPage() {
   const [takes, setTakes] = useState<TakeWithUrl[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
+  const [scope, setScope] = useState<Scope>(() => {
+    if (typeof window === "undefined") return "mine";
+    return (localStorage.getItem("zap.library.scope") as Scope | null) ?? "mine";
+  });
   const [view, setView] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "grid";
     const saved = localStorage.getItem("zap.library.view") as ViewMode | null;
@@ -128,20 +132,37 @@ function LibraryPage() {
   });
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
+  const readOnly = scope === "global";
+
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("zap.library.view", view);
   }, [view]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("zap.library.scope", scope);
+    // Clear selection when switching scopes to avoid cross-scope actions.
+    setSelected(new Set());
+  }, [scope]);
+
+  useEffect(() => {
+    let cancelled = false;
     (async () => {
+      setLoading(true);
       const { data: sess } = await supabase.auth.getSession();
       if (!sess.session) await supabase.auth.signInAnonymously();
-      const { data } = await supabase
+      const { data: sess2 } = await supabase.auth.getSession();
+      const uid = sess2.session?.user.id;
+
+      let q = supabase
         .from("takes")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(120);
+      if (scope === "mine" && uid) q = q.eq("user_id", uid);
+      const { data } = await q;
+      if (cancelled) return;
       if (!data) {
+        setTakes([]);
         setLoading(false);
         return;
       }
@@ -153,10 +174,15 @@ function LibraryPage() {
           return { ...t, url: signed?.signedUrl };
         }),
       );
+      if (cancelled) return;
       setTakes(withUrls);
       setLoading(false);
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [scope]);
+
 
   const filtered = useMemo(
     () => (filter === "all" ? takes : takes.filter((t) => t.kind === filter)),
