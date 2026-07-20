@@ -31,7 +31,7 @@ export interface StageViewProps {
   setEnhance: (v: boolean) => void;
   applied: PromptState | null;
   prevApplied: PromptState | null;
-  refImage: { dataUri: string; path?: string } | null;
+  refImage: { dataUri?: string; url?: string; path?: string } | null;
   liveGesture: LiveGesture;
 
   // actions
