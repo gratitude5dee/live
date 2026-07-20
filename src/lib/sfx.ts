@@ -40,6 +40,26 @@ export function initSfx() {
   initialized = true;
   bind();
   setEnabled(isSfxEnabled());
+  // Global throttle for declarative pointer-hover cues — overlaid layers
+  // (GlassSurface / GhostCursor) can re-fire `pointerenter` many times/sec
+  // and stack pad-style sounds into a continuous drone. Suppress
+  // re-triggers on the same element within 600ms.
+  const HOVER_COOLDOWN_MS = 600;
+  window.addEventListener(
+    "pointerenter",
+    (e) => {
+      const t = e.target as HTMLElement | null;
+      if (!t || !t.hasAttribute?.("data-cuelume-hover")) return;
+      const last = Number(t.dataset.sfxHoverAt ?? "0");
+      const now = performance.now();
+      if (now - last < HOVER_COOLDOWN_MS) {
+        e.stopImmediatePropagation();
+        return;
+      }
+      t.dataset.sfxHoverAt = String(now);
+    },
+    { capture: true },
+  );
 }
 
 export function setSfxEnabled(on: boolean) {
@@ -49,7 +69,15 @@ export function setSfxEnabled(on: boolean) {
   window.dispatchEvent(new CustomEvent("zap:sfx-changed", { detail: on }));
 }
 
+// Per-sound-name debounce — coalesces rapid imperative re-triggers
+// (e.g. multi-fire gesture events, streaming ACKs).
+const PLAY_COOLDOWN_MS = 180;
+const lastPlayAt = new Map<string, number>();
 export function play(name: SoundName) {
+  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+  const prev = lastPlayAt.get(name) ?? 0;
+  if (now - prev < PLAY_COOLDOWN_MS) return;
+  lastPlayAt.set(name, now);
   try {
     cuePlay(name);
   } catch {
