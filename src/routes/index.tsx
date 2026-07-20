@@ -582,11 +582,13 @@ function StagePage() {
 
 
   // --- Reactive Face: fire a preset for 4s then auto-revert ---
+  // snapshot is declared later — hop through a ref to avoid a TDZ.
+  const snapshotRef = useRef<() => Promise<void>>(async () => {});
   const triggerReactive = useCallback(
     async (action: FaceAction, label: string, score: number) => {
       // Double-blink → snapshot instead of prompt swap.
       if (action === "snapshot") {
-        void snapshot();
+        void snapshotRef.current();
         return;
       }
       const promptText = REACTIVE_PROMPTS[action];
