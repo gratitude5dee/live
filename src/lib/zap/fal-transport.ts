@@ -59,10 +59,17 @@ export class VideoTransport {
   /**
    * Hot-swap the outbound video track without renegotiating SDP.
    * Same-kind swap (video → video) is supported natively by WebRTC.
-   * If the sender doesn't exist yet (called before start()), the track is
-   * queued and applied once the peer connection is created.
+   * `kind` guides the encoder's contentHint:
+   *   - "motion" (default) → camera / composite feeds. Encoder prefers
+   *      framerate over spatial detail on bandwidth pressure — right call
+   *      for a realtime mirror.
+   *   - "detail" → depth / static gradients. Preserves spatial detail;
+   *      framerate can drop without hurting the look.
    */
-  async replaceVideoTrack(track: MediaStreamTrack | null) {
+  async replaceVideoTrack(
+    track: MediaStreamTrack | null,
+    opts?: { kind?: "motion" | "detail" },
+  ) {
     if (!this.videoSender) {
       this.pendingTrack = track;
       return;
@@ -71,7 +78,8 @@ export class VideoTransport {
     try {
       if (track) {
         try {
-          (track as MediaStreamTrack & { contentHint?: string }).contentHint = "detail";
+          (track as MediaStreamTrack & { contentHint?: string }).contentHint =
+            opts?.kind ?? "motion";
         } catch {
           /* older UAs */
         }
@@ -100,8 +108,28 @@ export class VideoTransport {
 
       // Add local webcam tracks
       for (const track of this.inputStream.getVideoTracks()) {
+        try {
+          (track as MediaStreamTrack & { contentHint?: string }).contentHint = "motion";
+        } catch {
+          /* older UAs */
+        }
         const sender = pc.addTrack(track, this.inputStream);
         if (!this.videoSender) this.videoSender = sender;
+      }
+      // Realtime encoder tuning: drop resolution before framerate on
+      // bandwidth pressure — glass-to-glass latency is our primary metric.
+      if (this.videoSender) {
+        try {
+          const params = this.videoSender.getParameters();
+          (params as RTCRtpSendParameters & { degradationPreference?: string })
+            .degradationPreference = "maintain-framerate";
+          params.encodings = [
+            { maxBitrate: 2_000_000, maxFramerate: 30 },
+          ];
+          await this.videoSender.setParameters(params);
+        } catch (error) {
+          console.warn("sender param tuning failed", error);
+        }
       }
       // Apply any track that was requested before the sender existed.
       if (this.pendingTrack && this.videoSender) {

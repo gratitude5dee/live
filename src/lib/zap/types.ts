@@ -9,9 +9,20 @@ export type PromptEventSource = "text" | "gesture" | "face" | "preset" | "remote
 
 export type VoiceState = "off" | "connecting" | "armed" | "thinking" | "error";
 
+export type RefImage = {
+  /** Public/signed URL — preferred: ~100 bytes over the WS instead of ~400 KB base64. */
+  url?: string;
+  /** data:image/jpeg;base64,... — fallback when storage upload hasn't completed. */
+  dataUri?: string;
+  /** Supabase Storage path, for logging + re-mint. */
+  path?: string;
+};
+
 export type PromptState = {
   text: string;
-  refImage?: string; // data URI
+  /** Reference image sent to Lucy. Prefer `refUrl`; `refImage` (data URI) is fallback. */
+  refImage?: string; // data URI (legacy / fallback)
+  refUrl?: string; // remote URL (preferred)
   refPath?: string; // storage path
 };
 

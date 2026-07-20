@@ -10,7 +10,7 @@ import { VisionBuffer } from "@/lib/zap/vision-buffer";
 import { drawHandOverlay, drawFaceOverlay } from "@/lib/zap/overlay";
 import { CompositeStream } from "@/lib/zap/composite-stream";
 import { DepthEngine, WebGPUUnsupportedError } from "@/lib/zap/depth-engine";
-import { loadGestureRecognizer, loadFaceLandmarker } from "@/lib/zap/mediapipe";
+import { loadGestureRecognizer, loadFaceLandmarker, takeWarmedVision } from "@/lib/zap/mediapipe";
 import LandingHero from "@/components/zap/LandingHero";
 import TemplateDialog, { type TemplateApplyPayload } from "@/components/zap/TemplateDialog";
 import DesktopStage from "@/components/zap/stage/DesktopStage";
@@ -66,7 +66,7 @@ function StagePage() {
   const [enhance, setEnhance] = useState(true);
   const [applied, setApplied] = useState<PromptState | null>(null);
   const [prevApplied, setPrevApplied] = useState<PromptState | null>(null);
-  const [refImage, setRefImage] = useState<{ dataUri: string; path?: string } | null>(
+  const [refImage, setRefImage] = useState<{ dataUri?: string; url?: string; path?: string } | null>(
     null,
   );
   const [recording, setRecording] = useState(false);
@@ -144,7 +144,27 @@ function StagePage() {
   const [depthOn, setDepthOn] = useState(false);
   const [depthLoading, setDepthLoading] = useState(false);
   const [depthProgress, setDepthProgress] = useState(0);
-  const [depthAvailable] = useState(() => DepthEngine.webgpuAvailable());
+  const [depthAvailable, setDepthAvailable] = useState(() => DepthEngine.webgpuAvailable());
+  // Presence of navigator.gpu ≠ working adapter. Confirm before enabling
+  // the toggle so iOS Safari (which now exposes navigator.gpu on some
+  // builds) doesn't advertise a broken button.
+  useEffect(() => {
+    if (!DepthEngine.webgpuAvailable()) {
+      setDepthAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const gpu = (navigator as unknown as { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu;
+        const adapter = gpu ? await gpu.requestAdapter() : null;
+        if (!cancelled) setDepthAvailable(!!adapter);
+      } catch {
+        if (!cancelled) setDepthAvailable(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const [depthStream, setDepthStream] = useState<MediaStream | null>(null);
   const depthOnRef = useRef(false);
   const depthEngineRef = useRef<DepthEngine | null>(null);
@@ -232,7 +252,7 @@ function StagePage() {
       }
     }
     const track = src?.getVideoTracks()[0] ?? null;
-    if (track) void transport.replaceVideoTrack(track);
+    if (track) void transport.replaceVideoTrack(track, { kind: label === "depth" ? "detail" : "motion" });
     setActiveSource(label);
   }, [ensureCompositor, disposeCompositor]);
 
@@ -362,25 +382,38 @@ function StagePage() {
     async (
       text: string,
       source: "text" | "gesture" | "face" | "preset" | "remote" | "voice",
-      ref?: { dataUri: string; path?: string } | null,
+      ref?: { dataUri?: string; url?: string; path?: string } | null,
+      opts?: { preset?: Preset },
     ) => {
       if (!transportRef.current) return;
       // Free-text / gesture / face / remote prompts should not bake MediaPipe
       // into Lucy's input — only preset apply paths can opt into that.
       if (source !== "preset") activePresetKindRef.current = "other";
+      // Prefer a remote URL for ref_image — it's ~100 bytes vs ~400KB base64
+      // over the WS on each apply/undo/reactive-revert.
+      const refUrl = ref?.url;
+      const refImageForLucy = refUrl ?? ref?.dataUri;
       const next: PromptState = {
         text,
         refImage: ref?.dataUri,
+        refUrl,
         refPath: ref?.path,
       };
+      // Voice and preset prompts are pre-templated (Computah / Lucy guide),
+      // so skip Lucy's ~200-400ms server-side prompt expansion for those.
+      // Preset rows carry an `expand` boolean (default false) for override.
+      const expand =
+        source === "voice"
+          ? false
+          : source === "preset"
+            ? ((opts?.preset as { expand?: boolean } | undefined)?.expand ?? false)
+            : enhance;
       // Fire Lucy FIRST (synchronous WS send), then update React state and
       // log — every ms we save here is a ms sooner Lucy starts repainting.
-      // Voice commands already come pre-templated by Computah, so skip the
-      // server-side prompt expansion (saves ~200-400ms per voice edit).
       transportRef.current.send({
         prompt: text,
-        enable_prompt_expansion: source === "voice" ? false : enhance,
-        reference_image_url: next.refImage,
+        enable_prompt_expansion: expand,
+        reference_image_url: refImageForLucy,
       });
       syncOutboundSource();
       setPrevApplied(applied);
@@ -399,7 +432,7 @@ function StagePage() {
     transportRef.current.send({
       prompt: prevApplied.text,
       enable_prompt_expansion: enhance,
-      reference_image_url: prevApplied.refImage,
+      reference_image_url: prevApplied.refUrl ?? prevApplied.refImage,
     });
     await logPromptEvent("undo", "gesture", prevApplied);
     toast("Reverted");
@@ -415,35 +448,19 @@ function StagePage() {
     await logPromptEvent("clear", "gesture", null);
   }, [applied, logPromptEvent, syncOutboundSource]);
 
-  const presetRefCache = useRef<Map<string, { dataUri: string; path: string }>>(new Map());
-
-  const loadPresetRef = useCallback(async (url: string) => {
-    const cached = presetRefCache.current.get(url);
-    if (cached) return cached;
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const dataUri: string = await new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result as string);
-      r.onerror = () => reject(r.error);
-      r.readAsDataURL(blob);
-    });
-    const entry = { dataUri, path: url };
-    presetRefCache.current.set(url, entry);
-    return entry;
+  // Preset ref images live at public URLs — send Lucy the URL directly
+  // (~100 bytes over the WS) instead of round-tripping through FileReader
+  // for a 200-400KB base64 payload on every apply.
+  const loadPresetRef = useCallback((url: string) => {
+    return { url, path: url } as { url: string; path: string };
   }, []);
 
   const applyPreset = useCallback(
     async (preset: Preset, source: "preset" | "gesture" | "remote" = "preset") => {
-      let ref = refImage;
+      let ref: { dataUri?: string; url?: string; path?: string } | null = refImage;
       if (preset.ref_image_url) {
-        try {
-          ref = await loadPresetRef(preset.ref_image_url);
-          setRefImage(ref);
-        } catch {
-          toast.error(`Couldn't load reference for ${preset.name}`);
-          return;
-        }
+        ref = loadPresetRef(preset.ref_image_url);
+        setRefImage(ref);
       } else if (preset.requires_ref && !refImage) {
         toast.error(`${preset.name} needs a reference image`);
         return;
@@ -455,7 +472,7 @@ function StagePage() {
           : preset.template_key === "gesture_fx"
           ? "gesture_fx"
           : "other";
-      await applyPrompt(preset.prompt, source, ref);
+      await applyPrompt(preset.prompt, source, ref, { preset });
     },
     [applyPrompt, refImage, presets, loadPresetRef],
   );
@@ -469,14 +486,22 @@ function StagePage() {
       const uid = userIdRef.current;
       const sid = sessionIdRef.current;
       let path: string | undefined;
+      let url: string | undefined;
       if (uid && sid) {
         const key = `${uid}/${sid}/tpl-${Date.now()}.jpg`;
         const { error: uErr } = await supabase.storage
           .from("refs")
           .upload(key, payload.file, { contentType: "image/jpeg", upsert: false });
-        if (!uErr) path = key;
+        if (!uErr) {
+          path = key;
+          const { data: signed } = await supabase.storage
+            .from("refs")
+            .createSignedUrl(key, 3600);
+          url = signed?.signedUrl;
+        }
       }
-      const ref = { dataUri: payload.dataUri, path };
+      // dataUri kept as fallback in case the storage upload failed.
+      const ref = { dataUri: url ? undefined : payload.dataUri, url, path };
       setRefImage(ref);
       // Templates (object add-in, try-on, object replace) rely on the ref
       // image, not on baked landmarks — send Lucy a clean camera frame.
@@ -531,7 +556,7 @@ function StagePage() {
         transportRef.current.send({
           prompt: prev?.text ?? "",
           enable_prompt_expansion: !!prev?.text,
-          reference_image_url: prev?.refImage,
+          reference_image_url: prev?.refUrl ?? prev?.refImage,
         });
         await logPromptEvent("apply", "face", prev);
       }, 4000);
@@ -766,9 +791,18 @@ function StagePage() {
       vb.start();
       visionBufRef.current = vb;
 
-      // Start MediaPipe (best-effort)
+      // Start MediaPipe (best-effort). Prefer any pre-warmed instances
+      // kicked off from the landing hero — those overlap the getUserMedia
+      // permission prompt so they cost ~0ms on Enter.
+      let warmed: { gesture?: import("@mediapipe/tasks-vision").GestureRecognizer; face?: import("@mediapipe/tasks-vision").FaceLandmarker } | null = null;
       try {
-        const rec = await loadGestureRecognizer();
+        const p = takeWarmedVision();
+        if (p) warmed = await p;
+      } catch (e) {
+        console.warn("warm vision failed", e);
+      }
+      try {
+        const rec = warmed?.gesture ?? (await loadGestureRecognizer());
         gestureRef.current = rec;
         const engine = new GestureEngine();
         engine.onFire = (label, action) => {
@@ -784,7 +818,7 @@ function StagePage() {
       }
 
       try {
-        const fl = await loadFaceLandmarker();
+        const fl = warmed?.face ?? (await loadFaceLandmarker());
         faceRef.current = fl;
         const fe = new FaceEngine();
         fe.onReactive = (action, label, score) =>
@@ -902,13 +936,21 @@ function StagePage() {
     }
   }, [applyPrompt, applyPreset, clearPrompt, handleGesture, presets, undo, stopSession, syncOutboundSource]);
 
-  // --- MediaPipe inference loop (single rAF, both engines, adaptive rate) ---
+  // --- MediaPipe inference loop (wall-clock scheduled, both engines) ---
+  // Frame-based cadence made gesture holds land at 200ms on a 120Hz iPhone
+  // and 800ms on a throttled Android — different UX per device. Time-base
+  // ~15Hz for each engine so REQUIRED_STREAK_MS in GestureEngine means the
+  // same wall-clock duration everywhere.
   const runInferenceLoop = useCallback(() => {
-    let frame = 0;
-    let slowStreak = 0;
-    let everyN = 2;
-    let last = performance.now();
+    const GESTURE_INTERVAL_MS = 66;   // ~15Hz gesture inference
+    const FACE_INTERVAL_MS = 66;      // ~15Hz face inference
+    const PIP_INTERVAL_MS = 66;       // ~15Hz PiP repaint (mobile PiP is ~96px)
+    let lastGesture = 0;
+    let lastFace = 0;
+    let lastPip = 0;
     let lastTimestamp = 0;
+    let slowStreak = 0;
+    let last = performance.now();
     let fatal = false;
     const loop = () => {
       if (fatal) return;
@@ -916,14 +958,12 @@ function StagePage() {
         inferenceFrameRef.current = requestAnimationFrame(loop);
         return;
       }
-      frame++;
       const now = performance.now();
       const dt = now - last;
       last = now;
       if (dt > 33) {
         slowStreak++;
-        if (slowStreak > 60 && everyN === 2) {
-          everyN = 3;
+        if (slowStreak > 60 && !perfModeRef.current) {
           perfModeRef.current = true;
           setPerfMode(true);
         }
@@ -931,26 +971,24 @@ function StagePage() {
         slowStreak = Math.max(0, slowStreak - 1);
       }
 
-      if (
-        frame % everyN === 0 &&
-        inputVideoRef.current.readyState >= 2 &&
-        inputVideoRef.current.videoWidth > 0
-      ) {
-        const ts = Math.max(lastTimestamp + 1, Math.round(performance.now()));
-        lastTimestamp = ts;
-        // MediaPipe tasks share WASM resources. Alternate them rather than
-        // invoking two task graphs against the same video frame back-to-back.
-        const runGesture = frame % (everyN * 2) === 0;
+      const v = inputVideoRef.current;
+      const videoReady = v.readyState >= 2 && v.videoWidth > 0;
+      if (videoReady) {
+        const nextTs = () => {
+          const ts = Math.max(lastTimestamp + 1, Math.round(performance.now()));
+          lastTimestamp = ts;
+          return ts;
+        };
         try {
-          if (runGesture && gestureRef.current && engineRef.current) {
-            const result = gestureRef.current.recognizeForVideo(
-              inputVideoRef.current,
-              ts,
-            );
+          if (now - lastGesture >= GESTURE_INTERVAL_MS && gestureRef.current && engineRef.current) {
+            lastGesture = now;
+            const result = gestureRef.current.recognizeForVideo(v, nextTs());
             engineRef.current.ingest(result);
             lastGestureResultRef.current = result;
-          } else if (!runGesture && faceRef.current && faceEngineRef.current) {
-            const fr = faceRef.current.detectForVideo(inputVideoRef.current, ts);
+          }
+          if (now - lastFace >= FACE_INTERVAL_MS && faceRef.current && faceEngineRef.current) {
+            lastFace = now;
+            const fr = faceRef.current.detectForVideo(v, nextTs());
             faceEngineRef.current.ingest(fr);
           }
         } catch (e) {
@@ -959,24 +997,35 @@ function StagePage() {
           if (message.includes("memory access out of bounds")) fatal = true;
         }
 
-        // Paint the camera into canvas as a compositing-safe PiP, then overlay
-        // the hand visualization. Some browsers render live video as a black
-        // hardware layer even while canvas/MediaPipe can read its frames.
+        // Repaint PiP at CSS-box resolution, not the 1280×720 camera source.
+        // Also skip entirely when the PiP element has no layout box (HUD
+        // hidden, panel unmounted) — saves ~50× fill-rate on mobile.
         const oc = overlayRef.current;
-        if (oc) {
-          const v = inputVideoRef.current;
-          const w = v.videoWidth || 640;
-          const h = v.videoHeight || 360;
-          if (oc.width !== w) oc.width = w;
-          if (oc.height !== h) oc.height = h;
-          const ctx = oc.getContext("2d");
-          if (ctx) {
-            ctx.save();
-            ctx.clearRect(0, 0, w, h);
-            ctx.drawImage(v, 0, 0, w, h);
-            ctx.restore();
-            drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
-            drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+        if (oc && now - lastPip >= PIP_INTERVAL_MS) {
+          lastPip = now;
+          const cssW = oc.clientWidth;
+          const cssH = oc.clientHeight;
+          if (cssW > 0 && cssH > 0) {
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            const targetW = Math.round(cssW * dpr);
+            const targetH = Math.round(cssH * dpr);
+            if (oc.width !== targetW) oc.width = targetW;
+            if (oc.height !== targetH) oc.height = targetH;
+            const ctx = oc.getContext("2d");
+            if (ctx) {
+              ctx.save();
+              ctx.clearRect(0, 0, targetW, targetH);
+              // Object-cover: scale to fill and center-crop
+              const vw = v.videoWidth;
+              const vh = v.videoHeight;
+              const s = Math.max(targetW / vw, targetH / vh);
+              const dw = vw * s;
+              const dh = vh * s;
+              ctx.drawImage(v, (targetW - dw) / 2, (targetH - dh) / 2, dw, dh);
+              ctx.restore();
+              drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
+              drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+            }
           }
         }
       }
@@ -994,12 +1043,12 @@ function StagePage() {
       blob: Blob,
       kind: "video" | "snapshot",
       durationMs?: number,
-      opts?: { autoDownload?: boolean },
+      opts?: { autoDownload?: boolean; ext?: string },
     ) => {
       const uid = userIdRef.current;
       const sid = sessionIdRef.current;
       if (!uid || !sid) return;
-      const ext = kind === "video" ? "webm" : "png";
+      const ext = opts?.ext ?? (kind === "video" ? "webm" : "png");
       const bucket = "takes";
       const filename = `take-${Date.now()}.${ext}`;
       const path = `${uid}/${sid}/${filename}`;
@@ -1061,27 +1110,58 @@ function StagePage() {
       if (!auto) toast.error("Live stream not ready");
       return;
     }
+    // Safari MediaRecorder does NOT support video/webm — check in this order
+    // so iOS lands on mp4 and every other browser lands on VP9/VP8.
+    const candidates = [
+      "video/mp4;codecs=avc1.64001f,mp4a.40.2",
+      "video/mp4",
+      "video/webm;codecs=vp9",
+      "video/webm;codecs=vp8",
+      "video/webm",
+    ];
+    const mimeType = candidates.find((m) => MediaRecorder.isTypeSupported(m));
+    if (!mimeType) {
+      if (!auto) toast.error("Recording unsupported on this browser");
+      return;
+    }
     chunksRef.current = [];
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
-      : "video/webm;codecs=vp8";
-    const rec = new MediaRecorder(s, { mimeType });
+    let rec: MediaRecorder;
+    try {
+      rec = new MediaRecorder(s, { mimeType });
+    } catch (e) {
+      console.warn("MediaRecorder init failed", e);
+      try {
+        rec = new MediaRecorder(s);
+      } catch (e2) {
+        console.warn("MediaRecorder fallback failed", e2);
+        if (!auto) toast.error("Recording unavailable");
+        return;
+      }
+    }
+    const activeMime = rec.mimeType || mimeType;
+    const ext = activeMime.includes("mp4") ? "mp4" : "webm";
     autoRecordRef.current = auto;
     rec.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
     rec.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: "video/webm" });
+      const blob = new Blob(chunksRef.current, { type: activeMime });
       const dur = Math.round(performance.now() - recordStartRef.current);
       const wasAuto = autoRecordRef.current;
-      const filename = `zap-live-${Date.now()}.webm`;
+      const filename = `zap-live-${Date.now()}.${ext}`;
       if (wasAuto) {
         const url = URL.createObjectURL(blob);
         setDownload({ url, filename });
       }
-      uploadTake(blob, "video", dur, { autoDownload: !wasAuto });
+      uploadTake(blob, "video", dur, { autoDownload: !wasAuto, ext });
       setRecording(false);
     };
     recordStartRef.current = performance.now();
-    rec.start(1000);
+    try {
+      rec.start(1000);
+    } catch (e) {
+      console.warn("MediaRecorder start failed", e);
+      if (!auto) toast.error("Recording failed to start");
+      return;
+    }
     recorderRef.current = rec;
     setRecording(true);
     // Auto-stop at 10 min for manual records
@@ -1261,14 +1341,27 @@ function StagePage() {
     c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
     const smallDataUri = c.toDataURL("image/jpeg", 0.85);
 
-    // Upload to storage
+    // Upload to storage and resolve a signed URL so we can send Lucy a
+    // ~100-byte URL over the WS instead of a 200-400KB base64 payload.
     const uid = userIdRef.current!;
     const sid = sessionIdRef.current!;
     const path = `${uid}/${sid}/ref-${Date.now()}.jpg`;
     const blob = await (await fetch(smallDataUri)).blob();
     const { error: uErr } = await supabase.storage.from("refs").upload(path, blob);
     if (uErr) toast.error(uErr.message);
-    setRefImage({ dataUri: smallDataUri, path: uErr ? undefined : path });
+    let url: string | undefined;
+    if (!uErr) {
+      const { data: signed } = await supabase.storage
+        .from("refs")
+        .createSignedUrl(path, 3600);
+      url = signed?.signedUrl;
+    }
+    // dataUri kept only when storage upload failed.
+    setRefImage({
+      dataUri: url ? undefined : smallDataUri,
+      url,
+      path: uErr ? undefined : path,
+    });
     toast.success("Reference set");
   };
 
@@ -1276,12 +1369,13 @@ function StagePage() {
     setRefImage(null);
     // If a prompt is currently applied with a ref, re-apply it without one
     // so Lucy immediately drops the reference from the live feed.
-    if (appliedRef.current?.refImage && transportRef.current) {
+    const cur = appliedRef.current;
+    if ((cur?.refImage || cur?.refUrl) && transportRef.current) {
       transportRef.current.send({
-        prompt: appliedRef.current.text,
+        prompt: cur.text,
         enable_prompt_expansion: enhance,
       });
-      const next: PromptState = { text: appliedRef.current.text };
+      const next: PromptState = { text: cur.text };
       setApplied(next);
     }
     toast("Reference cleared");
@@ -1557,7 +1651,7 @@ function StagePage() {
     onRefUpload,
     clearRefImage,
     applyRefImage: () => void applyRefImage(),
-    refImagePending: !!refImage && refImage.dataUri !== applied?.refImage,
+    refImagePending: !!refImage && (refImage.url ?? refImage.dataUri) !== (applied?.refUrl ?? applied?.refImage),
     bakeLandmarks,
     toggleBakeLandmarks,
     landmarksAvailable:

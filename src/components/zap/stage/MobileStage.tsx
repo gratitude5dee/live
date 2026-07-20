@@ -378,7 +378,7 @@ export default function MobileStage(p: StageViewProps) {
                       }`}
                     >
                       <img
-                        src={p.refImage.dataUri}
+                        src={p.refImage.url ?? p.refImage.dataUri}
                         alt="reference"
                         className="h-8 w-8 object-cover"
                       />

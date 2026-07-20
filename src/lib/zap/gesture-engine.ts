@@ -20,14 +20,16 @@ const GESTURE_ACTION_MAP: Record<string, GestureAction> = {
 };
 
 const CONFIDENCE_THRESHOLD = 0.7;
-const REQUIRED_FRAMES = 6;
+// Wall-clock instead of frame-count so gestures feel identical across
+// 60Hz laptops, 120Hz phones, and low-power throttled devices.
+const REQUIRED_STREAK_MS = 200;
 const COOLDOWN_MS = 1500;
 const OPEN_PALM_HOLD_MS = 800;
 
 type State = {
   currentLabel: string | null;
   currentScore: number;
-  streak: number;
+  streakStartMs: number;
   streakLabel: string | null;
   lastFireAt: number;
   openPalmStart: number | null;
@@ -38,7 +40,7 @@ export class GestureEngine {
   private state: State = {
     currentLabel: null,
     currentScore: 0,
-    streak: 0,
+    streakStartMs: 0,
     streakLabel: null,
     lastFireAt: 0,
     openPalmStart: null,
@@ -71,25 +73,26 @@ export class GestureEngine {
     // Streak tracking (only for actionable, high-confidence)
     if (bestLabel && bestScore >= CONFIDENCE_THRESHOLD && GESTURE_ACTION_MAP[bestLabel]) {
       if (this.state.streakLabel === bestLabel) {
-        this.state.streak += 1;
+        // continue streak
       } else {
         this.state.streakLabel = bestLabel;
-        this.state.streak = 1;
+        this.state.streakStartMs = now;
       }
     } else {
       this.state.streakLabel = null;
-      this.state.streak = 0;
+      this.state.streakStartMs = 0;
       this.state.openPalmStart = null;
-      // Edge-trigger: allow re-fire once we leave the class
       this.state.lastFiredLabel = null;
     }
 
+    const streakMs =
+      this.state.streakLabel && this.state.streakStartMs
+        ? now - this.state.streakStartMs
+        : 0;
+
     let holdProgress = 0;
 
-    if (
-      this.state.streakLabel === "Open_Palm" &&
-      this.state.streak >= REQUIRED_FRAMES
-    ) {
+    if (this.state.streakLabel === "Open_Palm" && streakMs >= REQUIRED_STREAK_MS) {
       if (this.state.openPalmStart === null) this.state.openPalmStart = now;
       holdProgress = Math.min(1, (now - this.state.openPalmStart) / OPEN_PALM_HOLD_MS);
     }
@@ -97,16 +100,14 @@ export class GestureEngine {
     this.onLiveUpdate?.(bestLabel, bestScore, holdProgress);
 
     if (now - this.state.lastFireAt < COOLDOWN_MS) return;
-    if (!this.state.streakLabel || this.state.streak < REQUIRED_FRAMES) return;
+    if (!this.state.streakLabel || streakMs < REQUIRED_STREAK_MS) return;
     if (this.state.lastFiredLabel === this.state.streakLabel) return;
 
     const label = this.state.streakLabel;
     const action = GESTURE_ACTION_MAP[label];
     if (!action) return;
 
-    if (label === "Open_Palm") {
-      if (holdProgress < 1) return;
-    }
+    if (label === "Open_Palm" && holdProgress < 1) return;
 
     this.state.lastFireAt = now;
     this.state.lastFiredLabel = label;

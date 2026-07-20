@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           created_at: string
           emoji: string
+          expand: boolean
           id: number
           kind: string
           name: string
@@ -32,6 +33,7 @@ export type Database = {
         Insert: {
           created_at?: string
           emoji: string
+          expand?: boolean
           id?: never
           kind?: string
           name: string
@@ -46,6 +48,7 @@ export type Database = {
         Update: {
           created_at?: string
           emoji?: string
+          expand?: boolean
           id?: never
           kind?: string
           name?: string

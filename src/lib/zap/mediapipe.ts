@@ -39,6 +39,42 @@ export async function loadFaceLandmarker(): Promise<FaceLandmarker> {
   });
 }
 
+/**
+ * Warm-start MediaPipe on landing so that when the user taps Enter we're
+ * not serializing WASM fetch + two ~10MB model downloads with the camera
+ * getUserMedia + Lucy signaling round-trip.
+ *
+ * Kicks off both loaders in parallel (they share FilesetResolver). Result
+ * is memoized; startSession() awaits the same promise and gets an
+ * already-resolved value on 2nd call.
+ *
+ * TODO (follow-up): self-host the .task models + wasm under /public/mediapipe
+ * with `Cache-Control: immutable` — removes two third-party DNS/TLS handshakes.
+ */
+let warmPromise: Promise<{
+  gesture: GestureRecognizer;
+  face: FaceLandmarker;
+}> | null = null;
+export function warmVision() {
+  if (warmPromise) return warmPromise;
+  warmPromise = Promise.all([loadGestureRecognizer(), loadFaceLandmarker()])
+    .then(([gesture, face]) => ({ gesture, face }))
+    .catch((e) => {
+      warmPromise = null; // allow retry
+      throw e;
+    });
+  return warmPromise;
+}
+
+/** Consume the warm-start result exactly once — either returns the pre-loaded
+ *  instance or triggers a fresh load. Safe to call even if warmVision() was
+ *  never invoked. */
+export function takeWarmedVision() {
+  const p = warmPromise;
+  warmPromise = null; // instances belong to caller now; don't reuse
+  return p;
+}
+
 // MediaPipe hand connections (21 landmarks per hand).
 export const HAND_CONNECTIONS: Array<[number, number]> = [
   [0, 1], [1, 2], [2, 3], [3, 4],
