@@ -17,12 +17,19 @@ export interface StageViewProps {
   recording: boolean;
   hudVisible: boolean;
   setHudVisible: (fn: (v: boolean) => boolean) => void;
+  /** Smoothed glass-to-glass latency in ms (prompt → first output frame). */
+  latencyMs: number | null;
 
   // media
   attachInputVideo: RefCallback<HTMLVideoElement>;
   attachOutputVideo: RefCallback<HTMLVideoElement>;
   overlayRef: RefCallback<HTMLCanvasElement> | React.RefObject<HTMLCanvasElement | null>;
   qrDataUrl: string | null;
+  /** Raw camera stream — used by the A/B wipe. */
+  inputStream: MediaStream | null;
+  /** Called by the output <video>'s onLoadedMetadata so latency tracking
+   *  can attach requestVideoFrameCallback in a single place. */
+  onOutputFrame?: (nowMs: number) => void;
 
   // prompt state
   prompt: string;

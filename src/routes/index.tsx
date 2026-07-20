@@ -11,6 +11,7 @@ import { drawHandOverlay, drawFaceOverlay } from "@/lib/zap/overlay";
 import { CompositeStream } from "@/lib/zap/composite-stream";
 import { DepthEngine, WebGPUUnsupportedError } from "@/lib/zap/depth-engine";
 import { loadGestureRecognizer, loadFaceLandmarker, takeWarmedVision } from "@/lib/zap/mediapipe";
+import { haptic } from "@/lib/zap/haptics";
 import LandingHero from "@/components/zap/LandingHero";
 import TemplateDialog, { type TemplateApplyPayload } from "@/components/zap/TemplateDialog";
 import DesktopStage from "@/components/zap/stage/DesktopStage";
@@ -104,6 +105,8 @@ function StagePage() {
   const outputVideoRef = useRef<HTMLVideoElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const inputStreamRef = useRef<MediaStream | null>(null);
+  // Mirror for consumers that need reactive access (A/B wipe).
+  const [inputStream, setInputStream] = useState<MediaStream | null>(null);
   const outputStreamRef = useRef<MediaStream | null>(null);
   const compositorRef = useRef<CompositeStream | null>(null);
   // Route MediaPipe baking based on the active preset's category:
@@ -139,6 +142,21 @@ function StagePage() {
   const autoStopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const autoStopScheduledRef = useRef(false);
+
+  // --- Glass-to-glass latency tracking ---
+  // `lastPromptSentAt` = wall-clock time of the last Lucy prompt send.
+  // The output <video>'s `requestVideoFrameCallback` measures the delta
+  // to the first painted frame after that stamp; EMA-smoothed (α=0.3).
+  const lastPromptSentAtRef = useRef<number | null>(null);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const recordLatencySample = useCallback((frameMs: number) => {
+    const sent = lastPromptSentAtRef.current;
+    if (sent === null) return;
+    const dt = frameMs - sent;
+    lastPromptSentAtRef.current = null;
+    if (dt < 20 || dt > 5000) return; // ignore obvious noise
+    setLatencyMs((prev) => (prev === null ? Math.round(dt) : Math.round(prev * 0.7 + dt * 0.3)));
+  }, []);
 
   // --- Depth (WebGPU) state ---
   const [depthOn, setDepthOn] = useState(false);
@@ -410,6 +428,7 @@ function StagePage() {
             : enhance;
       // Fire Lucy FIRST (synchronous WS send), then update React state and
       // log — every ms we save here is a ms sooner Lucy starts repainting.
+      lastPromptSentAtRef.current = performance.now();
       transportRef.current.send({
         prompt: text,
         enable_prompt_expansion: expand,
@@ -567,6 +586,7 @@ function StagePage() {
   // --- Handle a fired gesture ---
   const handleGesture = useCallback(
     async (label: string, action: GestureAction) => {
+      haptic("tick");
       const sid = sessionIdRef.current;
       const uid = userIdRef.current;
       if (sid && uid) {
@@ -678,6 +698,7 @@ function StagePage() {
     visionBufRef.current = null;
     inputStreamRef.current?.getTracks().forEach((t) => t.stop());
     inputStreamRef.current = null;
+    setInputStream(null);
     compositorRef.current?.stop();
     compositorRef.current = null;
     depthEngineRef.current?.stop();
@@ -750,6 +771,7 @@ function StagePage() {
 
 
       inputStreamRef.current = stream;
+      setInputStream(stream);
       if (inputVideoRef.current) {
         inputVideoRef.current.srcObject = stream;
         inputVideoRef.current.play().catch(() => {});
@@ -901,6 +923,20 @@ function StagePage() {
             .update({ transport: mode })
             .eq("id", session.id)
             .then(() => {});
+        },
+        onStateChange: (s) => {
+          if (s === "reconnecting") {
+            setConnState("reconnecting");
+            toast.loading("Reconnecting to Lucy…", { id: "lucy-reconnect" });
+          } else if (s === "connected") {
+            toast.dismiss("lucy-reconnect");
+            // If we were mid-reconnect, restore the "live" pill.
+            if (transportStateRef.current) setConnState("live");
+          } else if (s === "failed") {
+            toast.dismiss("lucy-reconnect");
+            toast.error("Lost connection to Lucy");
+            setConnState("failed");
+          }
         },
         onError: (e) => {
           console.error("fal error", e);
@@ -1164,6 +1200,7 @@ function StagePage() {
     }
     recorderRef.current = rec;
     setRecording(true);
+    haptic("record");
     // Auto-stop at 10 min for manual records
     if (!auto) {
       setTimeout(() => {
@@ -1577,6 +1614,7 @@ function StagePage() {
       // Swap in the new stream, then stop the old tracks.
       const old = inputStreamRef.current;
       inputStreamRef.current = newStream;
+      setInputStream(newStream);
       if (inputVideoRef.current) {
         inputVideoRef.current.srcObject = newStream;
         inputVideoRef.current.play().catch(() => {});
@@ -1635,6 +1673,9 @@ function StagePage() {
     attachOutputVideo,
     overlayRef,
     qrDataUrl,
+    inputStream,
+    latencyMs,
+    onOutputFrame: recordLatencySample,
     prompt,
     setPrompt,
     enhance,

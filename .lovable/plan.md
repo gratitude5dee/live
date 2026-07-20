@@ -1,68 +1,101 @@
-# Mobile Latency & Correctness Pass
+## Scope
 
-Ships the 8 fixes from the audit. Grouped by file so each edit is small and reviewable.
+Eight self-contained polish items from the audit. All frontend — no schema, no server functions, no transport rewrites beyond a reconnect loop around the existing `VideoTransport.start()`.
 
-## 1. iOS recording — never throw, pick a supported mime (`src/routes/index.tsx`)
+## 1. Onboarding coach marks (🟡)
 
-- In `startRecording`, probe candidates in order: `video/mp4;codecs=avc1.64001f,mp4a.40.2`, `video/mp4`, `video/webm;codecs=vp9`, `video/webm;codecs=vp8`, `video/webm`.
-- If none supported → toast + bail (don't construct).
-- Wrap `new MediaRecorder(...)` in try/catch; the auto-record `setTimeout` path also gets a try/catch so a failed init can't crash the session.
-- Thread the chosen `mimeType` through `chunksRef`/upload. Derive extension (`mp4`/`webm`) from mime in `uploadTake` and in the Download chip filename.
+New `src/components/zap/CoachMarks.tsx`. Three dismissible glass chips shown on first live session, keyed by `sessionStorage["zap.coach.v1"]`:
 
-## 2. Reference images ride as URLs, not base64 (`src/routes/index.tsx`, `fal-transport.ts`)
+- "👍 commits · 👎 undoes"
+- "🖐 hold to clear"
+- "Say 'Computah…' to talk"
 
-- After a successful `refs`-bucket upload, resolve a URL via `supabase.storage.from("refs").createSignedUrl(path, 3600)` (fallback `getPublicUrl`) and store it on `refImage` as `{ url, path, dataUri? }`.
-- `applyPrompt` / `undo` / reactive-revert pass `reference_image_url = ref.url ?? ref.dataUri` — data URI kept only as fallback when upload failed.
-- Preset ref cache (`loadPresetRef`) prefers the remote URL directly (they already live at public URLs); skip the FileReader base64 step.
-- `PromptState` gains `refUrl` alongside `refImage` so `flushPrompt()` re-sends the URL on reconnect.
+Fade in staggered (400ms apart), auto-dismiss after 8s or on click. Mounted from `DesktopStage` and `MobileStage` while `connState === "live"`.
 
-## 3. WebRTC sender tuning (`src/lib/zap/fal-transport.ts`)
+## 2. Latency HUD (🟡)
 
-- After `pc.addTrack` in `beginWebRTC`, set on the video sender:
-  - `params.degradationPreference = "maintain-framerate"`
-  - `params.encodings = [{ maxBitrate: 2_000_000, maxFramerate: 30 }]`
-- Change `replaceVideoTrack` `contentHint`: `"motion"` for raw/composite camera tracks, `"detail"` only for the depth track. Callers pass a `kind` hint; default `"motion"`.
-- Add lightweight `getStats()` poll (2 s) exposing `qualityLimitationReason` via a callback → surfaced in the perf chip.
+Extend the existing perf chip. In `src/routes/index.tsx`:
 
-## 4. Warm-start MediaPipe + fal token (`LandingHero.tsx`, `src/lib/zap/mediapipe.ts`, `src/routes/index.tsx`)
+- On every `applyPrompt`, stamp `lastPromptSentAt = performance.now()`.
+- Attach `requestVideoFrameCallback` to the output `<video>` in the stages; the first frame after `lastPromptSentAt` computes `glass-to-glass = now - lastPromptSentAt`, EMA-smoothed (α=0.3).
+- Expose via `StageViewProps.latencyMs` and render next to the perf chip. Fallback silently on Safari where `requestVideoFrameCallback` is missing.
 
-- Add module-level `warmVision()` in `mediapipe.ts` that memoizes `Promise.all([loadGestureRecognizer(), loadFaceLandmarker()])`.
-- Kick it off on `LandingHero` mount (idle callback) and on first pointerdown of the Enter CTA.
-- Pre-mint `mintFalRealtimeToken({ app: "decart/lucy-2-5/realtime" })` on Enter pointerdown; stash promise on a ref; `startSession` awaits both.
-- Follow-up (documented, not required this PR): self-host `.task` models + wasm under `/public/mediapipe/` with immutable cache headers. Left as TODO comment referencing this plan.
+## 3. Reconnect path (🟡)
 
-## 5. Right-size the PiP overlay (`src/routes/index.tsx` inference loop)
+`VideoTransport` gains `onStateChange("reconnecting" | "connected" | "failed")`. On `iceConnectionState === "failed"` or the 20s connect-timeout:
 
-- Size overlay canvas to `el.clientWidth * dpr` × `el.clientHeight * dpr` (recompute on ResizeObserver).
-- Skip the `drawImage(video, ...)` blit entirely when `showPip === false` or `hudVisible === false`.
-- Clear+draw only overlays that are actually visible.
+- Close pc + WS, reopen with exponential backoff (1s, 2s, 4s; max 3 tries).
+- Signal `reconnecting` between attempts; `flushPrompt()` already re-sends `lastPrompt` on reconnect.
+- After 3 failures, surface the current terminal error.
 
-## 6. Time-based cadence (`src/routes/index.tsx`, `src/lib/zap/gesture-engine.ts`)
+`src/routes/index.tsx` maps `reconnecting` to `ConnectionState` and shows a subtle amber pill in the header.
 
-- Replace frame-counter throttles with wall-clock: `if (now - lastGestureAt >= 66) run…`, `if (now - lastFaceAt >= 133) run…`.
-- Prefer `video.requestVideoFrameCallback` when available; fall back to `rAF`.
-- `GestureEngine`: swap `REQUIRED_FRAMES` for `REQUIRED_MS` (~200 ms streak, ~800 ms Open-Palm hold as today). Store `streakStartMs` instead of a frame count.
+## 4. A/B wipe on desktop (🟡)
 
-## 7. Preset prompts skip expansion (schema + UI)
+New `src/components/zap/stage/CompareWipe.tsx` layered over `DesktopStage`'s full-viewport output:
 
-- Migration: `ALTER TABLE public.presets ADD COLUMN expand boolean NOT NULL DEFAULT false;` (existing rows default to false — presets already follow the Lucy guide). Freeform text keeps `enable_prompt_expansion = enhance`.
-- `applyPrompt` uses `enable_prompt_expansion = source === "voice" ? false : source === "preset" ? preset.expand : enhance`. Preset is threaded via a new optional arg.
+- Renders a second `<video>` bound to the raw input stream, clipped with `clip-path: inset(0 <x>% 0 0)`.
+- Pointer-draggable vertical handle; hidden by default, toggled with a `⇔` glass button in the top-right cluster and the `\` key.
+- Desktop only (skipped in `MobileStage`).
 
-## 8. Misc mobile
+## 5. Countdown urgency (🟢)
 
-- `useIsMobile`: initialize synchronously from `matchMedia` with an SSR guard so the first paint mounts the correct stage (no Desktop→Mobile remount tearing video refs).
-- iOS keyboard: in `DesktopStage`/`MobileStage` prompt dock, subscribe to `visualViewport.resize` and set `translateY(-(innerHeight - visualViewport.height))` on the dock.
-- Mobile removes the auto `a.click()` in `uploadTake`; the Download chip is the only mobile path (desktop keeps auto-download behavior gated on `!isMobile`).
-- Depth availability: replace `"gpu" in navigator` with `await navigator.gpu?.requestAdapter()` on first Enter, memoized. If unavailable but `navigator.gpu` exists, offer the `DepthEngine` in `wasm` / `q8` / `inputSize:256` mode as a graceful fallback (new `DepthEngine` opts).
+In the 90s pill component (currently in `DesktopStage`/`MobileStage`):
+
+- `t > 15s` → white/neutral (today's look).
+- `t ≤ 15s` → amber glass + text.
+- `t ≤ 5s` → amber + `animate-pulse`.
+- No "+30s" button in this pass (economics/token-mint tradeoff — flag for follow-up).
+
+## 6. Touch targets on mobile (🟢)
+
+Move the PiP `Source` / `Depth` toggles out of the tiny PiP corner:
+
+- On mobile, render them as two 44×44 pill buttons inside the existing bottom sheet, above the prompt dock.
+- Desktop keeps the corner chips (bumped to `min-h-9`).
+
+## 7. Haptics (🟢)
+
+Tiny helper `src/lib/zap/haptics.ts` exposing `haptic("tick" | "ack" | "record")` → `navigator.vibrate([10])` / `[10,40,10]`. Wired at:
+
+- `GestureEngine.onFire` (tick)
+- Voice tool-call ack in `voice-agent.ts` (ack)
+- `startRecording` / `stopRecording` (record)
+
+Guarded by `"vibrate" in navigator` and a `prefers-reduced-motion` check.
+
+## 8. Reduced motion + battery + a11y (🟢)
+
+- `LiquidEther`, `Prism`, `Iridescence`, `Strands`: check `window.matchMedia("(prefers-reduced-motion: reduce)").matches` → skip the rAF loop and render a static first frame; also pause loops on `document.visibilitychange` when `hidden`.
+- Applied-prompt caption and Computah HUD in both stages get `role="status" aria-live="polite"`.
+- `ASCIIText` wordmark gets `aria-label="Zap"` with the canvas `aria-hidden`.
 
 ## Technical notes
 
-- No changes to Supabase schema besides the additive `presets.expand` column + grant unchanged (existing grants cover it).
-- `VideoTransport.replaceVideoTrack(track, { kind })` — additive optional arg, backward compatible.
-- `PromptState.refUrl` — additive optional field; existing consumers keep working with `refImage` (data URI) fallback.
-- No new dependencies.
+```text
+src/
+  components/zap/
+    CoachMarks.tsx              [new]
+    stage/
+      CompareWipe.tsx           [new, desktop only]
+      DesktopStage.tsx          [edit: latency chip, countdown color, wipe toggle, aria-live]
+      MobileStage.tsx           [edit: latency chip, countdown color, source/depth in bottom sheet, aria-live]
+  lib/zap/
+    haptics.ts                  [new]
+    fal-transport.ts            [edit: onStateChange + reconnect loop]
+  components/reactbits/
+    LiquidEther.tsx             [edit: reduced-motion + visibility pause]
+    Prism.tsx                   [edit: same]
+    Iridescence.tsx             [edit: same]
+    Strands.tsx                 [edit: same]
+    ASCIIText.tsx               [edit: aria]
+  routes/index.tsx              [edit: latencyMs plumbing, reconnect state, coach marks mount]
+```
 
-## Out of scope (call out but don't ship)
+No new dependencies, no migrations. All items are additive and independently revertable.
 
-- Self-hosting MediaPipe wasm/models under `/public` (leave TODO).
-- `getStats()` overlay UI polish beyond the existing perf chip.
+## Out of scope
+
+- "+30s" session extension (needs token-mint policy call)
+- Server-side latency instrumentation (`prompt_events` already logs client-side)
+- Rebuilding the perf chip layout
