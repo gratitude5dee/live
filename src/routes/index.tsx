@@ -304,8 +304,10 @@ function StagePage() {
       depthEngineRef.current = null;
       setDepthStream(null);
       syncOutboundSource();
+      playSfx("droplet");
       return;
     }
+
     try {
       setDepthLoading(true);
       setDepthProgress(0);
@@ -329,6 +331,8 @@ function StagePage() {
       setDepthStream(engine.stream);
       syncOutboundSource();
       toast.success("Depth stream engaged");
+      playSfx("bloom");
+
     } catch (err) {
       if (err instanceof WebGPUUnsupportedError) {
         toast.error("WebGPU not available");
