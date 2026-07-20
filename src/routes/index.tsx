@@ -1577,7 +1577,7 @@ function StagePage() {
     onRefUpload,
     clearRefImage,
     applyRefImage: () => void applyRefImage(),
-    refImagePending: !!refImage && refImage.dataUri !== applied?.refImage,
+    refImagePending: !!refImage && (refImage.url ?? refImage.dataUri) !== (applied?.refUrl ?? applied?.refImage),
     bakeLandmarks,
     toggleBakeLandmarks,
     landmarksAvailable:
