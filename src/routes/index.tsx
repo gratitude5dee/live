@@ -1199,6 +1199,8 @@ function StagePage() {
       if (blob) uploadTake(blob, "snapshot");
     }, "image/png");
   }, [uploadTake]);
+  useEffect(() => { snapshotRef.current = snapshot; }, [snapshot]);
+
 
   const startRecording = useCallback((auto: boolean) => {
     if (recorderRef.current?.state === "recording") return;
