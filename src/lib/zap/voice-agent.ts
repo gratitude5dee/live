@@ -378,7 +378,7 @@ export class VoiceAgent {
       clearTimeout(this.idleTimer);
       this.idleTimer = null;
     }
-    this.stopVad();
+    
     try {
       this.dc?.close();
     } catch {
