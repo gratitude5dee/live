@@ -416,12 +416,35 @@ function StagePage() {
       // Free-text / gesture / face / remote prompts should not bake MediaPipe
       // into Lucy's input — only preset apply paths can opt into that.
       if (source !== "preset") activePresetKindRef.current = "other";
+
+      // --- Spatial fusion: fill any {{where}} slot from the pointing tip ---
+      // For voice/text edits we also opportunistically inject a region phrase
+      // when the user is pointing (fresh <400ms) and the prompt contains the
+      // deictic "there" / "here" — makes "Computah, put a plant there" work.
+      let fusedText = text;
+      const eng = engineRef.current;
+      const tipFresh =
+        eng?.pointingTip && performance.now() - eng.pointingTipAt < 400
+          ? eng.pointingTip
+          : null;
+      if (fusedText.includes("{{where}}")) {
+        const phrase = tipFresh ? describeRegion(tipFresh.x, tipFresh.y).phrase : null;
+        fusedText = fillWhere(fusedText, phrase);
+      } else if (
+        tipFresh &&
+        (source === "voice" || source === "text") &&
+        /\b(there|here)\b/i.test(fusedText)
+      ) {
+        const { phrase } = describeRegion(tipFresh.x, tipFresh.y);
+        fusedText = `${fusedText.trimEnd().replace(/[.!?]$/, "")}, ${phrase}.`;
+      }
+
       // Prefer a remote URL for ref_image — it's ~100 bytes vs ~400KB base64
       // over the WS on each apply/undo/reactive-revert.
       const refUrl = ref?.url;
       const refImageForLucy = refUrl ?? ref?.dataUri;
       const next: PromptState = {
-        text,
+        text: fusedText,
         refImage: ref?.dataUri,
         refUrl,
         refPath: ref?.path,
@@ -439,7 +462,7 @@ function StagePage() {
       // log — every ms we save here is a ms sooner Lucy starts repainting.
       lastPromptSentAtRef.current = performance.now();
       transportRef.current.send({
-        prompt: text,
+        prompt: fusedText,
         enable_prompt_expansion: expand,
         reference_image_url: refImageForLucy,
       });
