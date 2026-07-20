@@ -77,6 +77,16 @@ export class VoiceAgent {
   private lastTranscript = "";
   private dispatchedInResponse = false;
   private model = OPENAI_REALTIME_MODEL;
+  private lastAppliedPrompt: string | null = null;
+  // --- Local VAD gate ---
+  private audioCtx: AudioContext | null = null;
+  private vadNode: AudioWorkletNode | null = null;
+  private vadSource: MediaStreamAudioSourceNode | null = null;
+  private vadWorkletUrl: string | null = null;
+  private micTrack: MediaStreamTrack | null = null;
+  private speaking = false;
+  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly VAD_HANGOVER_MS = 6_000;
 
   constructor(cb: VoiceCallbacks) {
     this.cb = cb;
