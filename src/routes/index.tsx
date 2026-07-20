@@ -429,35 +429,19 @@ function StagePage() {
     await logPromptEvent("clear", "gesture", null);
   }, [applied, logPromptEvent, syncOutboundSource]);
 
-  const presetRefCache = useRef<Map<string, { dataUri: string; path: string }>>(new Map());
-
-  const loadPresetRef = useCallback(async (url: string) => {
-    const cached = presetRefCache.current.get(url);
-    if (cached) return cached;
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const dataUri: string = await new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result as string);
-      r.onerror = () => reject(r.error);
-      r.readAsDataURL(blob);
-    });
-    const entry = { dataUri, path: url };
-    presetRefCache.current.set(url, entry);
-    return entry;
+  // Preset ref images live at public URLs — send Lucy the URL directly
+  // (~100 bytes over the WS) instead of round-tripping through FileReader
+  // for a 200-400KB base64 payload on every apply.
+  const loadPresetRef = useCallback((url: string) => {
+    return { url, path: url } as { url: string; path: string };
   }, []);
 
   const applyPreset = useCallback(
     async (preset: Preset, source: "preset" | "gesture" | "remote" = "preset") => {
-      let ref = refImage;
+      let ref: { dataUri?: string; url?: string; path?: string } | null = refImage;
       if (preset.ref_image_url) {
-        try {
-          ref = await loadPresetRef(preset.ref_image_url);
-          setRefImage(ref);
-        } catch {
-          toast.error(`Couldn't load reference for ${preset.name}`);
-          return;
-        }
+        ref = loadPresetRef(preset.ref_image_url);
+        setRefImage(ref);
       } else if (preset.requires_ref && !refImage) {
         toast.error(`${preset.name} needs a reference image`);
         return;
@@ -469,7 +453,7 @@ function StagePage() {
           : preset.template_key === "gesture_fx"
           ? "gesture_fx"
           : "other";
-      await applyPrompt(preset.prompt, source, ref);
+      await applyPrompt(preset.prompt, source, ref, { preset });
     },
     [applyPrompt, refImage, presets, loadPresetRef],
   );
@@ -483,14 +467,22 @@ function StagePage() {
       const uid = userIdRef.current;
       const sid = sessionIdRef.current;
       let path: string | undefined;
+      let url: string | undefined;
       if (uid && sid) {
         const key = `${uid}/${sid}/tpl-${Date.now()}.jpg`;
         const { error: uErr } = await supabase.storage
           .from("refs")
           .upload(key, payload.file, { contentType: "image/jpeg", upsert: false });
-        if (!uErr) path = key;
+        if (!uErr) {
+          path = key;
+          const { data: signed } = await supabase.storage
+            .from("refs")
+            .createSignedUrl(key, 3600);
+          url = signed?.signedUrl;
+        }
       }
-      const ref = { dataUri: payload.dataUri, path };
+      // dataUri kept as fallback in case the storage upload failed.
+      const ref = { dataUri: url ? undefined : payload.dataUri, url, path };
       setRefImage(ref);
       // Templates (object add-in, try-on, object replace) rely on the ref
       // image, not on baked landmarks — send Lucy a clean camera frame.
