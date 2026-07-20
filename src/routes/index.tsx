@@ -363,25 +363,38 @@ function StagePage() {
     async (
       text: string,
       source: "text" | "gesture" | "face" | "preset" | "remote" | "voice",
-      ref?: { dataUri: string; path?: string } | null,
+      ref?: { dataUri?: string; url?: string; path?: string } | null,
+      opts?: { preset?: Preset },
     ) => {
       if (!transportRef.current) return;
       // Free-text / gesture / face / remote prompts should not bake MediaPipe
       // into Lucy's input — only preset apply paths can opt into that.
       if (source !== "preset") activePresetKindRef.current = "other";
+      // Prefer a remote URL for ref_image — it's ~100 bytes vs ~400KB base64
+      // over the WS on each apply/undo/reactive-revert.
+      const refUrl = ref?.url;
+      const refImageForLucy = refUrl ?? ref?.dataUri;
       const next: PromptState = {
         text,
         refImage: ref?.dataUri,
+        refUrl,
         refPath: ref?.path,
       };
+      // Voice and preset prompts are pre-templated (Computah / Lucy guide),
+      // so skip Lucy's ~200-400ms server-side prompt expansion for those.
+      // Preset rows carry an `expand` boolean (default false) for override.
+      const expand =
+        source === "voice"
+          ? false
+          : source === "preset"
+            ? ((opts?.preset as { expand?: boolean } | undefined)?.expand ?? false)
+            : enhance;
       // Fire Lucy FIRST (synchronous WS send), then update React state and
       // log — every ms we save here is a ms sooner Lucy starts repainting.
-      // Voice commands already come pre-templated by Computah, so skip the
-      // server-side prompt expansion (saves ~200-400ms per voice edit).
       transportRef.current.send({
         prompt: text,
-        enable_prompt_expansion: source === "voice" ? false : enhance,
-        reference_image_url: next.refImage,
+        enable_prompt_expansion: expand,
+        reference_image_url: refImageForLucy,
       });
       syncOutboundSource();
       setPrevApplied(applied);
@@ -400,7 +413,7 @@ function StagePage() {
     transportRef.current.send({
       prompt: prevApplied.text,
       enable_prompt_expansion: enhance,
-      reference_image_url: prevApplied.refImage,
+      reference_image_url: prevApplied.refUrl ?? prevApplied.refImage,
     });
     await logPromptEvent("undo", "gesture", prevApplied);
     toast("Reverted");
