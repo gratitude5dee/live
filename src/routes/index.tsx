@@ -1755,6 +1755,8 @@ function StagePage() {
     if (!inputStreamRef.current) return;
     flippingRef.current = true;
     setFlipping(true);
+    playSfx("whisper");
+
     const next: "user" | "environment" = facingMode === "user" ? "environment" : "user";
     void (async () => {
       const mobileCapture = typeof window !== "undefined"
