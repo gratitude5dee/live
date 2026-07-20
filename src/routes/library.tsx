@@ -1077,14 +1077,17 @@ function CinemaFeed({
                 >
                   <IconLink className="h-4 w-4" />
                 </button>
-                <button
-                  onClick={() => onDelete(t)}
-                  className="grid h-11 w-11 place-items-center rounded-full bg-black/60 text-rose-200 ring-1 ring-rose-400/25 backdrop-blur-xl transition-all duration-400 hover:bg-rose-500/20"
-                  style={{ transitionTimingFunction: EASE }}
-                  title="Delete"
-                >
-                  <IconTrash className="h-4 w-4" />
-                </button>
+                {!readOnly && (
+                  <button
+                    onClick={() => onDelete(t)}
+                    className="grid h-11 w-11 place-items-center rounded-full bg-black/60 text-rose-200 ring-1 ring-rose-400/25 backdrop-blur-xl transition-all duration-400 hover:bg-rose-500/20"
+                    style={{ transitionTimingFunction: EASE }}
+                    title="Delete"
+                  >
+                    <IconTrash className="h-4 w-4" />
+                  </button>
+                )}
+
               </div>
             </div>
           );
