@@ -1149,14 +1149,17 @@ function CommandBar({
           <IconDownload className="h-3 w-3" />
         </span>
       </button>
-      <button
-        onClick={onDelete}
-        className="flex items-center gap-1.5 rounded-full bg-rose-500/10 px-3 py-1.5 text-[11px] uppercase tracking-[0.2em] text-rose-200 ring-1 ring-rose-400/25 transition-all duration-400 hover:bg-rose-500/20"
-        style={{ transitionTimingFunction: EASE }}
-      >
-        <IconTrash className="h-3.5 w-3.5" />
-        Delete
-      </button>
+      {onDelete && (
+        <button
+          onClick={onDelete}
+          className="flex items-center gap-1.5 rounded-full bg-rose-500/10 px-3 py-1.5 text-[11px] uppercase tracking-[0.2em] text-rose-200 ring-1 ring-rose-400/25 transition-all duration-400 hover:bg-rose-500/20"
+          style={{ transitionTimingFunction: EASE }}
+        >
+          <IconTrash className="h-3.5 w-3.5" />
+          Delete
+        </button>
+      )}
+
       <button
         onClick={onClear}
         className={`${MONO} rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-white/50 transition hover:text-white`}
