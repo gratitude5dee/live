@@ -10,7 +10,8 @@ import { VisionBuffer } from "@/lib/zap/vision-buffer";
 import { drawHandOverlay, drawFaceOverlay } from "@/lib/zap/overlay";
 import { CompositeStream } from "@/lib/zap/composite-stream";
 import { DepthEngine, WebGPUUnsupportedError } from "@/lib/zap/depth-engine";
-import { loadGestureRecognizer, loadFaceLandmarker } from "@/lib/zap/mediapipe";
+import { loadGestureRecognizer, loadFaceLandmarker, warmVision, takeWarmedVision } from "@/lib/zap/mediapipe";
+import { mintFalRealtimeToken } from "@/lib/fal-token.functions";
 import LandingHero from "@/components/zap/LandingHero";
 import TemplateDialog, { type TemplateApplyPayload } from "@/components/zap/TemplateDialog";
 import DesktopStage from "@/components/zap/stage/DesktopStage";
@@ -66,7 +67,7 @@ function StagePage() {
   const [enhance, setEnhance] = useState(true);
   const [applied, setApplied] = useState<PromptState | null>(null);
   const [prevApplied, setPrevApplied] = useState<PromptState | null>(null);
-  const [refImage, setRefImage] = useState<{ dataUri: string; path?: string } | null>(
+  const [refImage, setRefImage] = useState<{ dataUri?: string; url?: string; path?: string } | null>(
     null,
   );
   const [recording, setRecording] = useState(false);
