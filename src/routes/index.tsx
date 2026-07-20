@@ -425,6 +425,7 @@ function StagePage() {
             : enhance;
       // Fire Lucy FIRST (synchronous WS send), then update React state and
       // log — every ms we save here is a ms sooner Lucy starts repainting.
+      lastPromptSentAtRef.current = performance.now();
       transportRef.current.send({
         prompt: text,
         enable_prompt_expansion: expand,
