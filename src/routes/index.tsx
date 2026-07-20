@@ -714,10 +714,12 @@ function StagePage() {
 
   // --- Teardown current session (manual disconnect or auto-timeout) ---
   const stopSession = useCallback(async (reason?: "manual" | "timeout") => {
+    playSfx("droplet");
     if (autoStopTimerRef.current) {
       clearTimeout(autoStopTimerRef.current);
       autoStopTimerRef.current = null;
     }
+
     if (countdownIntervalRef.current) {
       clearInterval(countdownIntervalRef.current);
       countdownIntervalRef.current = null;
