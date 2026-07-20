@@ -1067,27 +1067,58 @@ function StagePage() {
       if (!auto) toast.error("Live stream not ready");
       return;
     }
+    // Safari MediaRecorder does NOT support video/webm — check in this order
+    // so iOS lands on mp4 and every other browser lands on VP9/VP8.
+    const candidates = [
+      "video/mp4;codecs=avc1.64001f,mp4a.40.2",
+      "video/mp4",
+      "video/webm;codecs=vp9",
+      "video/webm;codecs=vp8",
+      "video/webm",
+    ];
+    const mimeType = candidates.find((m) => MediaRecorder.isTypeSupported(m));
+    if (!mimeType) {
+      if (!auto) toast.error("Recording unsupported on this browser");
+      return;
+    }
     chunksRef.current = [];
-    const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
-      ? "video/webm;codecs=vp9"
-      : "video/webm;codecs=vp8";
-    const rec = new MediaRecorder(s, { mimeType });
+    let rec: MediaRecorder;
+    try {
+      rec = new MediaRecorder(s, { mimeType });
+    } catch (e) {
+      console.warn("MediaRecorder init failed", e);
+      try {
+        rec = new MediaRecorder(s);
+      } catch (e2) {
+        console.warn("MediaRecorder fallback failed", e2);
+        if (!auto) toast.error("Recording unavailable");
+        return;
+      }
+    }
+    const activeMime = rec.mimeType || mimeType;
+    const ext = activeMime.includes("mp4") ? "mp4" : "webm";
     autoRecordRef.current = auto;
     rec.ondataavailable = (e) => e.data.size && chunksRef.current.push(e.data);
     rec.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: "video/webm" });
+      const blob = new Blob(chunksRef.current, { type: activeMime });
       const dur = Math.round(performance.now() - recordStartRef.current);
       const wasAuto = autoRecordRef.current;
-      const filename = `zap-live-${Date.now()}.webm`;
+      const filename = `zap-live-${Date.now()}.${ext}`;
       if (wasAuto) {
         const url = URL.createObjectURL(blob);
         setDownload({ url, filename });
       }
-      uploadTake(blob, "video", dur, { autoDownload: !wasAuto });
+      uploadTake(blob, "video", dur, { autoDownload: !wasAuto, ext });
       setRecording(false);
     };
     recordStartRef.current = performance.now();
-    rec.start(1000);
+    try {
+      rec.start(1000);
+    } catch (e) {
+      console.warn("MediaRecorder start failed", e);
+      if (!auto) toast.error("Recording failed to start");
+      return;
+    }
     recorderRef.current = rec;
     setRecording(true);
     // Auto-stop at 10 min for manual records
