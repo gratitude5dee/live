@@ -1437,6 +1437,8 @@ function StagePage() {
   }, [refImage, prompt, applyPrompt]);
 
   // --- Computah voice control ---
+  // flipCamera is declared later; hop through a ref so we don't create a TDZ.
+  const flipCameraRef = useRef<() => void>(() => {});
   const handleVoiceToolCall = useCallback(
     async (call: VoiceToolCall) => {
       const agent = voiceAgentRef.current;
