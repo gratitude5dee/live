@@ -417,22 +417,25 @@ function LibraryHero({
   count,
   totalBytes,
   latest,
+  scope,
 }: {
   count: number;
   totalBytes: number;
   latest?: string;
+  scope: Scope;
 }) {
+  const isGlobal = scope === "global";
   return (
     <section className="relative mx-auto w-full max-w-[1440px] px-6 pb-8 pt-16 md:px-10 md:pb-14 md:pt-24">
       <div className={`${MONO} mb-6 text-[10px] uppercase tracking-[0.34em] text-white/45`}>
-        [ 001 / ARCHIVE ]
+        [ 001 / {isGlobal ? "GLOBAL FEED" : "ARCHIVE"} ]
       </div>
       <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-end">
         <h1
           className="font-semibold leading-[0.88] tracking-[-0.045em] text-white"
           style={{ fontSize: "clamp(3.5rem, 10vw, 8rem)", textWrap: "balance" as unknown as undefined }}
         >
-          Your
+          {isGlobal ? "Everyone's" : "Your"}
           <br />
           <span className="italic text-white/90">takes.</span>
         </h1>
@@ -452,14 +455,16 @@ function LibraryHero({
             )}
           </div>
           <p className="max-w-[42ch] text-right text-[13px] leading-relaxed text-white/50">
-            Every session Zap ever repainted. Scroll it like a cinema deck, browse the wall,
-            or pull a ledger and export a zip.
+            {isGlobal
+              ? "A public reel of every session Zap has ever repainted. Scroll, browse, or export a zip."
+              : "Every session Zap ever repainted. Scroll it like a cinema deck, browse the wall, or pull a ledger and export a zip."}
           </p>
         </div>
       </div>
     </section>
   );
 }
+
 
 /* ---------- Control bar (filter tabs + view segmented) ---------- */
 function ControlBar({
