@@ -21,6 +21,8 @@ export const Route = createFileRoute("/library")({
 type TakeWithUrl = TakeRow & { url?: string };
 type Filter = "all" | "video" | "image";
 type ViewMode = "feed" | "grid" | "list";
+type Scope = "mine" | "global";
+
 
 /* ---------- utils ---------- */
 const MONO = "font-mono tracking-tight tabular-nums";
@@ -118,6 +120,10 @@ function LibraryPage() {
   const [takes, setTakes] = useState<TakeWithUrl[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>("all");
+  const [scope, setScope] = useState<Scope>(() => {
+    if (typeof window === "undefined") return "mine";
+    return (localStorage.getItem("zap.library.scope") as Scope | null) ?? "mine";
+  });
   const [view, setView] = useState<ViewMode>(() => {
     if (typeof window === "undefined") return "grid";
     const saved = localStorage.getItem("zap.library.view") as ViewMode | null;
@@ -126,20 +132,37 @@ function LibraryPage() {
   });
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
+  const readOnly = scope === "global";
+
   useEffect(() => {
     if (typeof window !== "undefined") localStorage.setItem("zap.library.view", view);
   }, [view]);
 
   useEffect(() => {
+    if (typeof window !== "undefined") localStorage.setItem("zap.library.scope", scope);
+    // Clear selection when switching scopes to avoid cross-scope actions.
+    setSelected(new Set());
+  }, [scope]);
+
+  useEffect(() => {
+    let cancelled = false;
     (async () => {
+      setLoading(true);
       const { data: sess } = await supabase.auth.getSession();
       if (!sess.session) await supabase.auth.signInAnonymously();
-      const { data } = await supabase
+      const { data: sess2 } = await supabase.auth.getSession();
+      const uid = sess2.session?.user.id;
+
+      let q = supabase
         .from("takes")
         .select("*")
         .order("created_at", { ascending: false })
         .limit(120);
+      if (scope === "mine" && uid) q = q.eq("user_id", uid);
+      const { data } = await q;
+      if (cancelled) return;
       if (!data) {
+        setTakes([]);
         setLoading(false);
         return;
       }
@@ -151,10 +174,15 @@ function LibraryPage() {
           return { ...t, url: signed?.signedUrl };
         }),
       );
+      if (cancelled) return;
       setTakes(withUrls);
       setLoading(false);
     })();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [scope]);
+
 
   const filtered = useMemo(
     () => (filter === "all" ? takes : takes.filter((t) => t.kind === filter)),
@@ -289,19 +317,27 @@ function LibraryPage() {
 
       {view !== "feed" && (
         <>
-          <LibraryHero count={counts.all} totalBytes={totalBytes} latest={takes[0]?.created_at} />
+          <LibraryHero
+            count={counts.all}
+            totalBytes={totalBytes}
+            latest={takes[0]?.created_at}
+            scope={scope}
+          />
           <ControlBar
             filter={filter}
             setFilter={setFilter}
             counts={counts}
             view={view}
             setView={setView}
+            scope={scope}
+            setScope={setScope}
           />
         </>
       )}
 
       {view === "feed" && (
-        <div className="fixed right-6 top-6 z-30">
+        <div className="fixed right-6 top-6 z-30 flex items-center gap-2">
+          <ScopeSegmented scope={scope} onChange={setScope} />
           <ViewSegmented view={view} onChange={setView} />
         </div>
       )}
@@ -309,10 +345,10 @@ function LibraryPage() {
       <main className={view === "feed" ? "relative z-10" : "relative z-10 mx-auto w-full max-w-[1440px] px-6 pb-40 md:px-10"}>
         {loading && <SkeletonBento />}
 
-        {!loading && filtered.length === 0 && <EmptyPlate />}
+        {!loading && filtered.length === 0 && <EmptyPlate scope={scope} />}
 
         {!loading && filtered.length > 0 && view === "grid" && (
-          <BentoGrid takes={filtered} selected={selected} onToggle={toggleSelect} onDelete={deleteOne} />
+          <BentoGrid takes={filtered} selected={selected} onToggle={toggleSelect} onDelete={deleteOne} readOnly={readOnly} />
         )}
         {!loading && filtered.length > 0 && view === "list" && (
           <LedgerList
@@ -322,10 +358,11 @@ function LibraryPage() {
             onSelectAll={selectAll}
             onClearSelection={clearSelection}
             onDelete={deleteOne}
+            readOnly={readOnly}
           />
         )}
         {!loading && filtered.length > 0 && view === "feed" && (
-          <CinemaFeed takes={filtered} selected={selected} onToggle={toggleSelect} onDelete={deleteOne} />
+          <CinemaFeed takes={filtered} selected={selected} onToggle={toggleSelect} onDelete={deleteOne} readOnly={readOnly} />
         )}
       </main>
 
@@ -334,10 +371,11 @@ function LibraryPage() {
           count={selected.size}
           onDownload={bulkDownloadSequential}
           onDownloadZip={bulkDownloadZip}
-          onDelete={bulkDelete}
+          onDelete={readOnly ? undefined : bulkDelete}
           onClear={clearSelection}
         />
       )}
+
     </div>
   );
 }
@@ -379,22 +417,25 @@ function LibraryHero({
   count,
   totalBytes,
   latest,
+  scope,
 }: {
   count: number;
   totalBytes: number;
   latest?: string;
+  scope: Scope;
 }) {
+  const isGlobal = scope === "global";
   return (
     <section className="relative mx-auto w-full max-w-[1440px] px-6 pb-8 pt-16 md:px-10 md:pb-14 md:pt-24">
       <div className={`${MONO} mb-6 text-[10px] uppercase tracking-[0.34em] text-white/45`}>
-        [ 001 / ARCHIVE ]
+        [ 001 / {isGlobal ? "GLOBAL FEED" : "ARCHIVE"} ]
       </div>
       <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-end">
         <h1
           className="font-semibold leading-[0.88] tracking-[-0.045em] text-white"
           style={{ fontSize: "clamp(3.5rem, 10vw, 8rem)", textWrap: "balance" as unknown as undefined }}
         >
-          Your
+          {isGlobal ? "Everyone's" : "Your"}
           <br />
           <span className="italic text-white/90">takes.</span>
         </h1>
@@ -414,8 +455,9 @@ function LibraryHero({
             )}
           </div>
           <p className="max-w-[42ch] text-right text-[13px] leading-relaxed text-white/50">
-            Every session Zap ever repainted. Scroll it like a cinema deck, browse the wall,
-            or pull a ledger and export a zip.
+            {isGlobal
+              ? "A public reel of every session Zap has ever repainted. Scroll, browse, or export a zip."
+              : "Every session Zap ever repainted. Scroll it like a cinema deck, browse the wall, or pull a ledger and export a zip."}
           </p>
         </div>
       </div>
@@ -423,19 +465,24 @@ function LibraryHero({
   );
 }
 
-/* ---------- Control bar (filter tabs + view segmented) ---------- */
+
+/* ---------- Control bar (scope + filter tabs + view segmented) ---------- */
 function ControlBar({
   filter,
   setFilter,
   counts,
   view,
   setView,
+  scope,
+  setScope,
 }: {
   filter: Filter;
   setFilter: (f: Filter) => void;
   counts: { all: number; video: number; image: number };
   view: ViewMode;
   setView: (v: ViewMode) => void;
+  scope: Scope;
+  setScope: (s: Scope) => void;
 }) {
   const tabs: { k: Filter; label: string }[] = [
     { k: "all", label: "All" },
@@ -444,38 +491,71 @@ function ControlBar({
   ];
   return (
     <div className="sticky top-[76px] z-30 mx-auto w-full max-w-[1440px] px-6 md:px-10">
-      <div className="flex items-end justify-between gap-4 border-b border-white/[0.07] py-4 backdrop-blur-md">
-        <div className="flex items-end gap-6">
-          {tabs.map((t) => {
-            const active = filter === t.k;
-            return (
-              <button
-                key={t.k}
-                onClick={() => setFilter(t.k)}
-                className="group relative pb-2 text-[13px] font-medium transition-colors duration-300"
-                style={{ transitionTimingFunction: EASE }}
-              >
-                <span className={active ? "text-white" : "text-white/45 group-hover:text-white/75"}>
-                  {t.label}
-                </span>
-                <sup className={`${MONO} ml-1 text-[9px] ${active ? "text-white/50" : "text-white/25"}`}>
-                  {counts[t.k]}
-                </sup>
-                <span
-                  className={`absolute inset-x-0 -bottom-px h-px origin-left bg-white transition-transform duration-500 ${
-                    active ? "scale-x-100" : "scale-x-0"
-                  }`}
+      <div className="flex flex-wrap items-end justify-between gap-4 border-b border-white/[0.07] py-4 backdrop-blur-md">
+        <div className="flex items-end gap-4">
+          <ScopeSegmented scope={scope} onChange={setScope} />
+          <span className="mb-2 hidden h-4 w-px bg-white/10 sm:block" />
+          <div className="flex items-end gap-6">
+            {tabs.map((t) => {
+              const active = filter === t.k;
+              return (
+                <button
+                  key={t.k}
+                  onClick={() => setFilter(t.k)}
+                  className="group relative pb-2 text-[13px] font-medium transition-colors duration-300"
                   style={{ transitionTimingFunction: EASE }}
-                />
-              </button>
-            );
-          })}
+                >
+                  <span className={active ? "text-white" : "text-white/45 group-hover:text-white/75"}>
+                    {t.label}
+                  </span>
+                  <sup className={`${MONO} ml-1 text-[9px] ${active ? "text-white/50" : "text-white/25"}`}>
+                    {counts[t.k]}
+                  </sup>
+                  <span
+                    className={`absolute inset-x-0 -bottom-px h-px origin-left bg-white transition-transform duration-500 ${
+                      active ? "scale-x-100" : "scale-x-0"
+                    }`}
+                    style={{ transitionTimingFunction: EASE }}
+                  />
+                </button>
+              );
+            })}
+          </div>
         </div>
         <ViewSegmented view={view} onChange={setView} />
       </div>
     </div>
   );
 }
+
+function ScopeSegmented({ scope, onChange }: { scope: Scope; onChange: (s: Scope) => void }) {
+  const items: { s: Scope; label: string }[] = [
+    { s: "mine", label: "Yours" },
+    { s: "global", label: "Global" },
+  ];
+  return (
+    <div className="rounded-full border border-white/10 bg-white/[0.03] p-1 backdrop-blur-xl">
+      <div className="flex items-center gap-0.5">
+        {items.map(({ s, label }) => {
+          const active = scope === s;
+          return (
+            <button
+              key={s}
+              onClick={() => onChange(s)}
+              className={`relative rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] transition-all duration-500 ${
+                active ? "bg-white text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.4)]" : "text-white/60 hover:text-white"
+              }`}
+              style={{ transitionTimingFunction: EASE }}
+            >
+              {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 
 function ViewSegmented({ view, onChange }: { view: ViewMode; onChange: (v: ViewMode) => void }) {
   const items: { v: ViewMode; label: string; icon: React.FC<{ className?: string }> }[] = [
@@ -551,11 +631,13 @@ function BentoGrid({
   selected,
   onToggle,
   onDelete,
+  readOnly,
 }: {
   takes: TakeWithUrl[];
   selected: Set<number>;
   onToggle: (id: number) => void;
   onDelete: (t: TakeWithUrl) => void;
+  readOnly?: boolean;
 }) {
   return (
     <div className="mt-8 grid auto-rows-[220px] grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 lg:grid-cols-6 lg:auto-rows-[240px]">
@@ -571,6 +653,7 @@ function BentoGrid({
             selected={selected.has(t.id)}
             onToggle={() => onToggle(t.id)}
             onDelete={() => onDelete(t)}
+            readOnly={readOnly}
           />
         );
       })}
@@ -585,6 +668,7 @@ function BentoCard({
   selected,
   onToggle,
   onDelete,
+  readOnly,
 }: {
   take: TakeWithUrl;
   index: number;
@@ -592,7 +676,9 @@ function BentoCard({
   selected: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  readOnly?: boolean;
 }) {
+
   const [hover, setHover] = useState(false);
   const spanCls = hero ? "col-span-2 row-span-2" : "col-span-1 row-span-1";
   return (
@@ -674,14 +760,17 @@ function BentoCard({
                 <IconDownload className="h-3.5 w-3.5" />
               </a>
             )}
-            <button
-              onClick={onDelete}
-              className="grid h-7 w-7 place-items-center rounded-full bg-white/5 text-white/60 ring-1 ring-white/10 transition-all duration-300 hover:bg-rose-500/20 hover:text-rose-200 hover:ring-rose-400/30"
-              style={{ transitionTimingFunction: EASE }}
-              title="Delete"
-            >
-              <IconTrash className="h-3.5 w-3.5" />
-            </button>
+            {!readOnly && (
+              <button
+                onClick={onDelete}
+                className="grid h-7 w-7 place-items-center rounded-full bg-white/5 text-white/60 ring-1 ring-white/10 transition-all duration-300 hover:bg-rose-500/20 hover:text-rose-200 hover:ring-rose-400/30"
+                style={{ transitionTimingFunction: EASE }}
+                title="Delete"
+              >
+                <IconTrash className="h-3.5 w-3.5" />
+              </button>
+            )}
+
           </div>
         </div>
       </div>
@@ -697,6 +786,7 @@ function LedgerList({
   onSelectAll,
   onClearSelection,
   onDelete,
+  readOnly,
 }: {
   takes: TakeWithUrl[];
   selected: Set<number>;
@@ -704,7 +794,9 @@ function LedgerList({
   onSelectAll: () => void;
   onClearSelection: () => void;
   onDelete: (t: TakeWithUrl) => void;
+  readOnly?: boolean;
 }) {
+
   const allSel = takes.length > 0 && takes.every((t) => selected.has(t.id));
   return (
     <div className="mt-8 overflow-hidden rounded-[1.5rem] border border-white/[0.08] bg-black/40 backdrop-blur-xl">
@@ -774,14 +866,17 @@ function LedgerList({
                   <IconDownload className="h-3.5 w-3.5" />
                 </a>
               )}
-              <button
-                onClick={() => onDelete(t)}
-                className="grid h-8 w-8 place-items-center rounded-full text-white/50 ring-1 ring-transparent transition-all duration-300 hover:bg-rose-500/15 hover:text-rose-200 hover:ring-rose-400/25"
-                style={{ transitionTimingFunction: EASE }}
-                title="Delete"
-              >
-                <IconTrash className="h-3.5 w-3.5" />
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={() => onDelete(t)}
+                  className="grid h-8 w-8 place-items-center rounded-full text-white/50 ring-1 ring-transparent transition-all duration-300 hover:bg-rose-500/15 hover:text-rose-200 hover:ring-rose-400/25"
+                  style={{ transitionTimingFunction: EASE }}
+                  title="Delete"
+                >
+                  <IconTrash className="h-3.5 w-3.5" />
+                </button>
+              )}
+
             </div>
           </div>
         );
@@ -796,12 +891,15 @@ function CinemaFeed({
   selected,
   onToggle,
   onDelete,
+  readOnly,
 }: {
   takes: TakeWithUrl[];
   selected: Set<number>;
   onToggle: (id: number) => void;
   onDelete: (t: TakeWithUrl) => void;
+  readOnly?: boolean;
 }) {
+
   const containerRef = useRef<HTMLDivElement | null>(null);
   const videoRefs = useRef<Map<number, HTMLVideoElement>>(new Map());
   const [muted, setMuted] = useState(true);
@@ -979,14 +1077,17 @@ function CinemaFeed({
                 >
                   <IconLink className="h-4 w-4" />
                 </button>
-                <button
-                  onClick={() => onDelete(t)}
-                  className="grid h-11 w-11 place-items-center rounded-full bg-black/60 text-rose-200 ring-1 ring-rose-400/25 backdrop-blur-xl transition-all duration-400 hover:bg-rose-500/20"
-                  style={{ transitionTimingFunction: EASE }}
-                  title="Delete"
-                >
-                  <IconTrash className="h-4 w-4" />
-                </button>
+                {!readOnly && (
+                  <button
+                    onClick={() => onDelete(t)}
+                    className="grid h-11 w-11 place-items-center rounded-full bg-black/60 text-rose-200 ring-1 ring-rose-400/25 backdrop-blur-xl transition-all duration-400 hover:bg-rose-500/20"
+                    style={{ transitionTimingFunction: EASE }}
+                    title="Delete"
+                  >
+                    <IconTrash className="h-4 w-4" />
+                  </button>
+                )}
+
               </div>
             </div>
           );
@@ -1014,9 +1115,10 @@ function CommandBar({
   count: number;
   onDownload: () => void;
   onDownloadZip: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   onClear: () => void;
 }) {
+
   return (
     <div
       className="fixed inset-x-0 bottom-6 z-50 mx-auto flex w-fit max-w-[calc(100vw-24px)] items-center gap-1 rounded-full border border-white/12 bg-black/75 p-1.5 pl-3 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.9)] backdrop-blur-2xl"
@@ -1047,14 +1149,17 @@ function CommandBar({
           <IconDownload className="h-3 w-3" />
         </span>
       </button>
-      <button
-        onClick={onDelete}
-        className="flex items-center gap-1.5 rounded-full bg-rose-500/10 px-3 py-1.5 text-[11px] uppercase tracking-[0.2em] text-rose-200 ring-1 ring-rose-400/25 transition-all duration-400 hover:bg-rose-500/20"
-        style={{ transitionTimingFunction: EASE }}
-      >
-        <IconTrash className="h-3.5 w-3.5" />
-        Delete
-      </button>
+      {onDelete && (
+        <button
+          onClick={onDelete}
+          className="flex items-center gap-1.5 rounded-full bg-rose-500/10 px-3 py-1.5 text-[11px] uppercase tracking-[0.2em] text-rose-200 ring-1 ring-rose-400/25 transition-all duration-400 hover:bg-rose-500/20"
+          style={{ transitionTimingFunction: EASE }}
+        >
+          <IconTrash className="h-3.5 w-3.5" />
+          Delete
+        </button>
+      )}
+
       <button
         onClick={onClear}
         className={`${MONO} rounded-full px-3 py-1.5 text-[10px] uppercase tracking-[0.22em] text-white/50 transition hover:text-white`}
@@ -1073,7 +1178,8 @@ function CommandBar({
 }
 
 /* ---------- Empty state ---------- */
-function EmptyPlate() {
+function EmptyPlate({ scope }: { scope: Scope }) {
+  const isGlobal = scope === "global";
   return (
     <div className="relative mx-auto mt-16 max-w-3xl overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.02] p-16 text-center">
       <div
@@ -1083,13 +1189,17 @@ function EmptyPlate() {
       </div>
       <div className="relative z-10 flex flex-col items-center gap-4">
         <span className={`${MONO} text-[10px] uppercase tracking-[0.34em] text-white/40`}>
-          [ ARCHIVE ]
+          [ {isGlobal ? "GLOBAL FEED" : "ARCHIVE"} ]
         </span>
-        <h2 className="text-3xl font-semibold tracking-[-0.02em] md:text-5xl">The archive is empty.</h2>
+        <h2 className="text-3xl font-semibold tracking-[-0.02em] md:text-5xl">
+          {isGlobal ? "Nothing to see yet." : "The archive is empty."}
+        </h2>
         <p className="max-w-md text-sm text-white/55">
-          Go live once and Zap will auto-record your session in portrait 9:16. It'll land here the
-          moment it uploads.
+          {isGlobal
+            ? "No one has recorded a take yet. Be the first — go live and Zap will upload it here for everyone."
+            : "Go live once and Zap will auto-record your session in portrait 9:16. It'll land here the moment it uploads."}
         </p>
+
         <Link
           to="/"
           className="group mt-4 flex items-center gap-1.5 rounded-full bg-white py-2 pl-5 pr-2 text-[11px] uppercase tracking-[0.24em] text-black transition-all duration-400 active:scale-[0.98]"
