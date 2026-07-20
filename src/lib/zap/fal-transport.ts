@@ -222,7 +222,10 @@ export class VideoTransport {
 
       pc.oniceconnectionstatechange = () => {
         if (pc.iceConnectionState === "failed") {
-          this.cb.onError(new Error("Lucy ICE negotiation failed (network/firewall)"));
+          // Try to recover before surfacing an error to the user.
+          if (!this.reconnecting && !this.closed) {
+            void this.attemptReconnect();
+          }
         }
       };
 
@@ -230,8 +233,11 @@ export class VideoTransport {
         if (pc.connectionState === "connected") {
           if (this.connectTimeout) clearTimeout(this.connectTimeout);
           this.connectTimeout = null;
+          this.cb.onStateChange?.("connected");
         } else if (pc.connectionState === "failed") {
-          this.cb.onError(new Error("Lucy WebRTC connection failed"));
+          if (!this.reconnecting && !this.closed) {
+            void this.attemptReconnect();
+          }
         }
       };
 
