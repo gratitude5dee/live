@@ -116,7 +116,13 @@ export class VoiceAgent {
 
       const pc = new RTCPeerConnection();
       this.pc = pc;
-      pc.addTrack(mic.getAudioTracks()[0], mic);
+      const audioTrack = mic.getAudioTracks()[0];
+      this.micTrack = audioTrack;
+      // Local VAD gate: keep the OpenAI mic muted until sustained speech is
+      // heard, then unmute. Re-mute after VAD_HANGOVER_MS of silence.
+      audioTrack.enabled = false;
+      pc.addTrack(audioTrack, mic);
+      void this.startVad(mic).catch((e) => console.warn("vad init failed", e));
       // No pc.ontrack — text-only session; no remote audio pipeline.
       pc.onconnectionstatechange = () => {
         if (
