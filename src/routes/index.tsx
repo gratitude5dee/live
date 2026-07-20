@@ -145,7 +145,27 @@ function StagePage() {
   const [depthOn, setDepthOn] = useState(false);
   const [depthLoading, setDepthLoading] = useState(false);
   const [depthProgress, setDepthProgress] = useState(0);
-  const [depthAvailable] = useState(() => DepthEngine.webgpuAvailable());
+  const [depthAvailable, setDepthAvailable] = useState(() => DepthEngine.webgpuAvailable());
+  // Presence of navigator.gpu ≠ working adapter. Confirm before enabling
+  // the toggle so iOS Safari (which now exposes navigator.gpu on some
+  // builds) doesn't advertise a broken button.
+  useEffect(() => {
+    if (!DepthEngine.webgpuAvailable()) {
+      setDepthAvailable(false);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const gpu = (navigator as unknown as { gpu?: { requestAdapter: () => Promise<unknown> } }).gpu;
+        const adapter = gpu ? await gpu.requestAdapter() : null;
+        if (!cancelled) setDepthAvailable(!!adapter);
+      } catch {
+        if (!cancelled) setDepthAvailable(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   const [depthStream, setDepthStream] = useState<MediaStream | null>(null);
   const depthOnRef = useRef(false);
   const depthEngineRef = useRef<DepthEngine | null>(null);
