@@ -317,19 +317,27 @@ function LibraryPage() {
 
       {view !== "feed" && (
         <>
-          <LibraryHero count={counts.all} totalBytes={totalBytes} latest={takes[0]?.created_at} />
+          <LibraryHero
+            count={counts.all}
+            totalBytes={totalBytes}
+            latest={takes[0]?.created_at}
+            scope={scope}
+          />
           <ControlBar
             filter={filter}
             setFilter={setFilter}
             counts={counts}
             view={view}
             setView={setView}
+            scope={scope}
+            setScope={setScope}
           />
         </>
       )}
 
       {view === "feed" && (
-        <div className="fixed right-6 top-6 z-30">
+        <div className="fixed right-6 top-6 z-30 flex items-center gap-2">
+          <ScopeSegmented scope={scope} onChange={setScope} />
           <ViewSegmented view={view} onChange={setView} />
         </div>
       )}
@@ -337,10 +345,10 @@ function LibraryPage() {
       <main className={view === "feed" ? "relative z-10" : "relative z-10 mx-auto w-full max-w-[1440px] px-6 pb-40 md:px-10"}>
         {loading && <SkeletonBento />}
 
-        {!loading && filtered.length === 0 && <EmptyPlate />}
+        {!loading && filtered.length === 0 && <EmptyPlate scope={scope} />}
 
         {!loading && filtered.length > 0 && view === "grid" && (
-          <BentoGrid takes={filtered} selected={selected} onToggle={toggleSelect} onDelete={deleteOne} />
+          <BentoGrid takes={filtered} selected={selected} onToggle={toggleSelect} onDelete={deleteOne} readOnly={readOnly} />
         )}
         {!loading && filtered.length > 0 && view === "list" && (
           <LedgerList
@@ -350,10 +358,11 @@ function LibraryPage() {
             onSelectAll={selectAll}
             onClearSelection={clearSelection}
             onDelete={deleteOne}
+            readOnly={readOnly}
           />
         )}
         {!loading && filtered.length > 0 && view === "feed" && (
-          <CinemaFeed takes={filtered} selected={selected} onToggle={toggleSelect} onDelete={deleteOne} />
+          <CinemaFeed takes={filtered} selected={selected} onToggle={toggleSelect} onDelete={deleteOne} readOnly={readOnly} />
         )}
       </main>
 
@@ -362,10 +371,11 @@ function LibraryPage() {
           count={selected.size}
           onDownload={bulkDownloadSequential}
           onDownloadZip={bulkDownloadZip}
-          onDelete={bulkDelete}
+          onDelete={readOnly ? undefined : bulkDelete}
           onClear={clearSelection}
         />
       )}
+
     </div>
   );
 }
