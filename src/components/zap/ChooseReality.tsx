@@ -191,7 +191,6 @@ export default function ChooseReality({ onEnter, disabled }: ChooseRealityProps)
                 <button
                   onClick={zap}
                   disabled={disabled}
-                  data-cuelume-hover="chime"
                   data-cuelume-press="press"
                   className="group flex flex-1 items-center justify-between rounded-full bg-white px-5 py-3 text-sm font-semibold text-black shadow-[inset_0_1px_0_rgba(255,255,255,0.7),0_10px_30px_rgba(0,0,0,0.35)] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] hover:bg-white active:scale-[0.98] disabled:opacity-50"
                 >
