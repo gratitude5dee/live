@@ -21,6 +21,8 @@ export const Route = createFileRoute("/library")({
 type TakeWithUrl = TakeRow & { url?: string };
 type Filter = "all" | "video" | "image";
 type ViewMode = "feed" | "grid" | "list";
+type Scope = "mine" | "global";
+
 
 /* ---------- utils ---------- */
 const MONO = "font-mono tracking-tight tabular-nums";
