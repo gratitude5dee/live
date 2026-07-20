@@ -50,6 +50,10 @@ export const REACTIVE_PROMPTS: Record<string, string> = {
     "Add colorful confetti falling around the person and bouncing lightly off their shoulders.",
   sparkle:
     "Add small glowing golden sparkles floating around the person's head and shoulders, drifting with their movement.",
+  golden_hour:
+    "Bathe the scene in warm golden-hour lighting with a soft rim light on the person and a gentle amber glow on the background.",
+  parallax:
+    "Add a subtle parallax depth to the background — distant elements drift slowly opposite to the person's motion, foreground stays crisp.",
 };
 
 export type RemoteMessage =

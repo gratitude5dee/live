@@ -35,7 +35,8 @@ export async function loadFaceLandmarker(): Promise<FaceLandmarker> {
     runningMode: "VIDEO",
     numFaces: 1,
     outputFaceBlendshapes: true,
-    outputFacialTransformationMatrixes: false,
+    // Enables head-roll derivation used by FaceEngine's parallax trigger.
+    outputFacialTransformationMatrixes: true,
   });
 }
 

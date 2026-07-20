@@ -13,10 +13,13 @@ export type TemplateOpts = {
  */
 export function buildTemplatePrompt(key: TemplateKey, opts: TemplateOpts = {}): string {
   const detail = opts.detail?.trim();
+  // `{{where}}` is a spatial placeholder — the runtime fills it from the
+  // user's pointing gesture (see describeRegion) so pointing top-left
+  // resolves into "…at the upper left of the frame".
   switch (key) {
     case "object_add": {
       const object = detail || "the object from the reference image";
-      const where = opts.placement?.trim() || "the person's hand";
+      const where = opts.placement?.trim() || "{{where}}";
       return `Add ${object} to ${where}, attached naturally and shifting with their motion. Cast soft light on nearby skin and clothing so it feels physically present. Keep the person's identity, face, hair, and background unchanged.`;
     }
     case "clothing_tryon": {
@@ -26,10 +29,20 @@ export function buildTemplatePrompt(key: TemplateKey, opts: TemplateOpts = {}): 
     }
     case "object_replace": {
       const replacement = detail || "the object from the reference image";
-      const target = opts.placement?.trim() || "the object the person is holding";
+      const target = opts.placement?.trim() || "{{where}}";
       return `Replace ${target} with ${replacement}, matching its scale, orientation, and grip so it looks physically held. Preserve the person's hand pose, fingers, identity, face, clothing, lighting, and background exactly. The new object moves with the hand naturally frame to frame.`;
     }
   }
+}
+
+/**
+ * Fill any `{{where}}` slot in a prompt with a natural-language spatial
+ * fragment. When no fragment is provided, replaces with a generic fallback
+ * ("in the frame") rather than leaving the raw placeholder visible to Lucy.
+ */
+export function fillWhere(prompt: string, where: string | null): string {
+  if (!prompt.includes("{{where}}")) return prompt;
+  return prompt.replaceAll("{{where}}", where && where.trim() ? where.trim() : "in the frame");
 }
 
 export const TEMPLATE_META: Record<
