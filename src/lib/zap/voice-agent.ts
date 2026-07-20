@@ -221,24 +221,19 @@ export class VoiceAgent {
       return;
     }
 
-    if (
-      type === "response.output_audio_transcript.done" ||
-      type === "response.audio_transcript.done"
-    ) {
-      const text = String((msg as { transcript?: string }).transcript ?? "").trim();
-      if (text) {
-        const word = text.split(/\s+/)[0].replace(/[.!?,]$/, "");
-        if (word) this.cb.onAck(word);
-      }
-      return;
-    }
+    // NOTE: response.audio_transcript.done is dead — output_modalities is
+    // ["text"], so the model never speaks. Acks are now picked client-side.
 
     const dispatchFn = (name: string, callId: string, argsObj: unknown) => {
       if (!name || !callId) return;
       if (this.dispatchedCallIds.has(callId)) return;
       this.dispatchedCallIds.add(callId);
       this.dispatchedInResponse = true;
-      if (name === "apply_video_edit") this.resetIdle();
+      if (name === "apply_video_edit" || name === "control_session") {
+        this.resetIdle();
+        // Flash a random ack word in the HUD on the same tick as the dispatch.
+        this.cb.onAck(pickAck());
+      }
       this.cb.onToolCall({ callId, name, args: argsObj ?? {} });
     };
 
