@@ -631,11 +631,13 @@ function BentoGrid({
   selected,
   onToggle,
   onDelete,
+  readOnly,
 }: {
   takes: TakeWithUrl[];
   selected: Set<number>;
   onToggle: (id: number) => void;
   onDelete: (t: TakeWithUrl) => void;
+  readOnly?: boolean;
 }) {
   return (
     <div className="mt-8 grid auto-rows-[220px] grid-cols-2 gap-3 md:grid-cols-4 md:gap-4 lg:grid-cols-6 lg:auto-rows-[240px]">
@@ -651,6 +653,7 @@ function BentoGrid({
             selected={selected.has(t.id)}
             onToggle={() => onToggle(t.id)}
             onDelete={() => onDelete(t)}
+            readOnly={readOnly}
           />
         );
       })}
@@ -665,6 +668,7 @@ function BentoCard({
   selected,
   onToggle,
   onDelete,
+  readOnly,
 }: {
   take: TakeWithUrl;
   index: number;
@@ -672,7 +676,9 @@ function BentoCard({
   selected: boolean;
   onToggle: () => void;
   onDelete: () => void;
+  readOnly?: boolean;
 }) {
+
   const [hover, setHover] = useState(false);
   const spanCls = hero ? "col-span-2 row-span-2" : "col-span-1 row-span-1";
   return (
