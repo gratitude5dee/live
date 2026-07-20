@@ -19,6 +19,8 @@ import { CompositeStream } from "@/lib/zap/composite-stream";
 import { DepthEngine, WebGPUUnsupportedError } from "@/lib/zap/depth-engine";
 import { loadGestureRecognizer, loadFaceLandmarker, takeWarmedVision } from "@/lib/zap/mediapipe";
 import { haptic } from "@/lib/zap/haptics";
+import { play as playSfx } from "@/lib/sfx";
+
 import LandingHero from "@/components/zap/LandingHero";
 import TemplateDialog, { type TemplateApplyPayload } from "@/components/zap/TemplateDialog";
 import DesktopStage from "@/components/zap/stage/DesktopStage";
