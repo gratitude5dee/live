@@ -584,6 +584,11 @@ function StagePage() {
   // --- Reactive Face: fire a preset for 4s then auto-revert ---
   const triggerReactive = useCallback(
     async (action: FaceAction, label: string, score: number) => {
+      // Double-blink → snapshot instead of prompt swap.
+      if (action === "snapshot") {
+        void snapshot();
+        return;
+      }
       const promptText = REACTIVE_PROMPTS[action];
       if (!promptText || !transportRef.current) return;
       // Log as face + reactive
