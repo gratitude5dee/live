@@ -1437,6 +1437,8 @@ function StagePage() {
   }, [refImage, prompt, applyPrompt]);
 
   // --- Computah voice control ---
+  // flipCamera is declared later; hop through a ref so we don't create a TDZ.
+  const flipCameraRef = useRef<() => void>(() => {});
   const handleVoiceToolCall = useCallback(
     async (call: VoiceToolCall) => {
       const agent = voiceAgentRef.current;
@@ -1449,6 +1451,61 @@ function StagePage() {
         // Safety net: Whisper heard the wake word but the model didn't route it.
         const t = (call.args as { transcript?: string })?.transcript ?? "";
         toast(`Heard "${t.slice(0, 60)}" — say it again`);
+        return;
+      }
+      if (call.name === "control_session") {
+        const args = (call.args ?? {}) as { action?: string; preset_name?: string };
+        const action = String(args.action ?? "");
+        try {
+          switch (action) {
+            case "undo":
+              await undo();
+              break;
+            case "clear":
+              await clearPrompt();
+              break;
+            case "record_toggle":
+              toggleRecord();
+              break;
+            case "flip_camera":
+              flipCameraRef.current();
+              break;
+            case "stop_session":
+              await stopSession("manual");
+              break;
+            case "apply_preset": {
+              const name = (args.preset_name ?? "").toLowerCase().trim();
+              const p = name
+                ? presets.find((x) => x.name.toLowerCase().includes(name))
+                : null;
+              if (p) {
+                applyPreset(p);
+              } else {
+                toast(`No preset matched "${args.preset_name ?? ""}"`);
+              }
+              break;
+            }
+            default:
+              agent?.sendToolOutput(
+                call.callId,
+                { status: "unknown_action" },
+                { respond: false },
+              );
+              return;
+          }
+          agent?.sendToolOutput(
+            call.callId,
+            { status: "applied", action },
+            { respond: false },
+          );
+        } catch (e) {
+          console.warn("voice control_session failed", e);
+          agent?.sendToolOutput(
+            call.callId,
+            { status: "error" },
+            { respond: false },
+          );
+        }
         return;
       }
       if (call.name !== "apply_video_edit") {
@@ -1487,6 +1544,9 @@ function StagePage() {
           { status: "applied" },
           { respond: false },
         );
+        // Push follow-up context so a subsequent "make it redder" merges
+        // rather than fragments.
+        agent?.updateLastPrompt(lucyPrompt);
         setVoiceState("armed");
         // Log to voice_events
         const uid = userIdRef.current;
@@ -1514,7 +1574,20 @@ function StagePage() {
         setVoiceState("armed");
       }
     },
-    [applyPrompt, refImage, voiceAck, voiceTranscript],
+    [
+      applyPrompt,
+      refImage,
+      voiceAck,
+      voiceTranscript,
+      undo,
+      clearPrompt,
+      toggleRecord,
+      // flipCamera reached via flipCameraRef to avoid TDZ
+
+      stopSession,
+      presets,
+      applyPreset,
+    ],
   );
 
   const toggleVoice = useCallback(async () => {
@@ -1638,6 +1711,11 @@ function StagePage() {
       setFlipping(false);
     })();
   }, [facingMode, syncOutboundSource]);
+
+  // Bridge flipCamera into the ref used by handleVoiceToolCall (declared earlier).
+  useEffect(() => {
+    flipCameraRef.current = flipCamera;
+  }, [flipCamera]);
 
   if (connState === "idle") {
     return (

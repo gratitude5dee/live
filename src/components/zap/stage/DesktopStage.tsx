@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import type { StageViewProps } from "./types";
 import type { TemplateKey } from "@/lib/zap/prompt-templates";
 import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
+import VoiceHintChip from "./VoiceHintChip";
 
 function DepthVideo({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLVideoElement>(null);
@@ -170,6 +171,7 @@ export default function DesktopStage(p: StageViewProps) {
               "{p.voiceTranscript}"
             </div>
           )}
+          <VoiceHintChip active={p.voiceState === "armed"} />
         </div>
       )}
 
