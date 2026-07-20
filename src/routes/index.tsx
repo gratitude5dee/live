@@ -1200,6 +1200,7 @@ function StagePage() {
     }
     recorderRef.current = rec;
     setRecording(true);
+    haptic("record");
     // Auto-stop at 10 min for manual records
     if (!auto) {
       setTimeout(() => {
