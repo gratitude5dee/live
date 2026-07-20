@@ -537,7 +537,7 @@ function StagePage() {
         transportRef.current.send({
           prompt: prev?.text ?? "",
           enable_prompt_expansion: !!prev?.text,
-          reference_image_url: prev?.refImage,
+          reference_image_url: prev?.refUrl ?? prev?.refImage,
         });
         await logPromptEvent("apply", "face", prev);
       }, 4000);
@@ -1267,14 +1267,27 @@ function StagePage() {
     c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
     const smallDataUri = c.toDataURL("image/jpeg", 0.85);
 
-    // Upload to storage
+    // Upload to storage and resolve a signed URL so we can send Lucy a
+    // ~100-byte URL over the WS instead of a 200-400KB base64 payload.
     const uid = userIdRef.current!;
     const sid = sessionIdRef.current!;
     const path = `${uid}/${sid}/ref-${Date.now()}.jpg`;
     const blob = await (await fetch(smallDataUri)).blob();
     const { error: uErr } = await supabase.storage.from("refs").upload(path, blob);
     if (uErr) toast.error(uErr.message);
-    setRefImage({ dataUri: smallDataUri, path: uErr ? undefined : path });
+    let url: string | undefined;
+    if (!uErr) {
+      const { data: signed } = await supabase.storage
+        .from("refs")
+        .createSignedUrl(path, 3600);
+      url = signed?.signedUrl;
+    }
+    // dataUri kept only when storage upload failed.
+    setRefImage({
+      dataUri: url ? undefined : smallDataUri,
+      url,
+      path: uErr ? undefined : path,
+    });
     toast.success("Reference set");
   };
 
@@ -1282,12 +1295,13 @@ function StagePage() {
     setRefImage(null);
     // If a prompt is currently applied with a ref, re-apply it without one
     // so Lucy immediately drops the reference from the live feed.
-    if (appliedRef.current?.refImage && transportRef.current) {
+    const cur = appliedRef.current;
+    if ((cur?.refImage || cur?.refUrl) && transportRef.current) {
       transportRef.current.send({
-        prompt: appliedRef.current.text,
+        prompt: cur.text,
         enable_prompt_expansion: enhance,
       });
-      const next: PromptState = { text: appliedRef.current.text };
+      const next: PromptState = { text: cur.text };
       setApplied(next);
     }
     toast("Reference cleared");
