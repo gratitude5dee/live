@@ -964,6 +964,8 @@ function StagePage() {
             outputVideoRef.current.play().catch(() => {});
           }
           setConnState("live");
+          playSfx("ready");
+
           // Auto-start recording in 9:16 as soon as Lucy is live
           setDownload((d) => {
             if (d) URL.revokeObjectURL(d.url);
