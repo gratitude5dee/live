@@ -227,7 +227,7 @@ export class DepthEngine {
     this.ctx.fillRect(0, 0, cw, ch);
     this.ctx.imageSmoothingEnabled = true;
     this.ctx.imageSmoothingQuality = "high";
-    this.ctx.drawImage(tmp, ox, oy, outW, outH);
+    this.ctx.drawImage(this.paintTmpCanvas!, ox, oy, outW, outH);
     if (this.firstFrameResolve) {
       this.firstFrameResolve();
       this.firstFrameResolve = null;
