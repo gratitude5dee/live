@@ -7,7 +7,14 @@ import { VideoTransport } from "@/lib/zap/fal-transport";
 import { GestureEngine, type GestureAction } from "@/lib/zap/gesture-engine";
 import { FaceEngine, type FaceAction } from "@/lib/zap/face-engine";
 import { VisionBuffer } from "@/lib/zap/vision-buffer";
-import { drawHandOverlay, drawFaceOverlay } from "@/lib/zap/overlay";
+import {
+  drawHandOverlay,
+  drawFaceOverlay,
+  drawFaceOvalOnly,
+  drawFingertipDots,
+} from "@/lib/zap/overlay";
+import { describeRegion } from "@/lib/zap/describe-region";
+import { fillWhere } from "@/lib/zap/prompt-templates";
 import { CompositeStream } from "@/lib/zap/composite-stream";
 import { DepthEngine, WebGPUUnsupportedError } from "@/lib/zap/depth-engine";
 import { loadGestureRecognizer, loadFaceLandmarker, takeWarmedVision } from "@/lib/zap/mediapipe";
@@ -219,11 +226,13 @@ function StagePage() {
       const compositor = new CompositeStream(
         src,
         (ctx) => {
+          // Use minimalist bake variants so Lucy's RGB input isn't
+          // contaminated with cyan tessellation/skeleton lines.
           const kind = activePresetKindRef.current;
           if (kind === "character_swap") {
-            drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+            drawFaceOvalOnly(ctx, faceEngineRef.current?.lastResult ?? null);
           } else if (kind === "gesture_fx") {
-            drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
+            drawFingertipDots(ctx, lastGestureResultRef.current);
           }
         },
         { fps: 30, targetAspect: 9 / 16, targetHeight: 1920 },
