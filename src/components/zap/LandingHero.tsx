@@ -10,6 +10,7 @@ import ShinyText from "@/components/reactbits/ShinyText";
 import ChooseReality from "@/components/zap/ChooseReality";
 import ModesSection from "@/components/zap/ModesSection";
 import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
+import { warmVision } from "@/lib/zap/mediapipe";
 
 interface LandingHeroProps {
   onEnter: () => void;
@@ -57,6 +58,21 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
     mq.addEventListener?.("change", update);
     return () => mq.removeEventListener?.("change", update);
   }, []);
+
+  // Warm-start MediaPipe on landing mount (idle) so the WASM + two ~10MB
+  // model downloads finish while the user is reading the hero, not
+  // serialized behind getUserMedia + Lucy signaling on Enter.
+  useEffect(() => {
+    const idle = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    const kick = () => { void warmVision().catch(() => {}); };
+    if (idle) idle(kick);
+    else setTimeout(kick, 400);
+  }, []);
+
+  // Also kick on first pointer-down on Enter — cheap insurance against
+  // the idle callback getting deferred on low-power devices.
+  const armWarm = () => { void warmVision().catch(() => {}); };
+
 
   return (
     <div className="relative w-full bg-[#050505] text-[#FAFAFA]">
