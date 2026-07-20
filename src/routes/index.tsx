@@ -1698,7 +1698,7 @@ function StagePage() {
     const agent = new VoiceAgent({
       onState: (s) => {
         setVoiceState(s);
-        if (s === "listening") playSfx("chime");
+        if (s === "armed") playSfx("chime");
       },
       onTranscript: (t) => setVoiceTranscript(t),
       onAck: (w) => { setVoiceAck(w); playSfx("tick"); },
