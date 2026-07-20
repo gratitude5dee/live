@@ -3,6 +3,7 @@ import type { StageViewProps } from "./types";
 import type { TemplateKey } from "@/lib/zap/prompt-templates";
 import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
 import { useEffect, useRef, useState } from "react";
+import VoiceHintChip from "./VoiceHintChip";
 
 function DepthVideo({ stream }: { stream: MediaStream }) {
   const ref = useRef<HTMLVideoElement>(null);
