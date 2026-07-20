@@ -168,9 +168,44 @@ export const COMPUTAH_TOOLS = [
   },
   {
     type: "function",
+    name: "control_session",
+    description:
+      "Perform a session-control action (no video edit): undo, clear, toggle recording, flip camera, stop session, or apply a named preset.",
+    parameters: {
+      type: "object",
+      properties: {
+        action: {
+          type: "string",
+          enum: [
+            "undo",
+            "clear",
+            "record_toggle",
+            "flip_camera",
+            "stop_session",
+            "apply_preset",
+          ],
+        },
+        preset_name: {
+          type: "string",
+          description:
+            "Required only when action is apply_preset. The spoken name of the preset.",
+        },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    type: "function",
     name: "wait_for_user",
     description:
       "Call when the latest audio has no wake word, is silence, noise, music, or speech not addressed to Computah. Ends the turn without speaking.",
     parameters: { type: "object", properties: {}, required: [] },
   },
 ] as const;
+
+/** Build a lightweight follow-up context clause appended to instructions. */
+export function buildFollowUpContext(lastPrompt: string | null): string {
+  if (!lastPrompt) return "";
+  const clipped = lastPrompt.length > 400 ? lastPrompt.slice(0, 400) + "…" : lastPrompt;
+  return `\n\n# Last applied edit (context for follow-ups)\nThe user's currently visible edit was produced by this Lucy prompt:\n"""${clipped}"""\nIf the new request is a modification of this edit, MERGE — return a new self-contained lucy_prompt that combines both.`;
+}
