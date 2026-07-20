@@ -78,15 +78,11 @@ export class VoiceAgent {
   private dispatchedInResponse = false;
   private model = OPENAI_REALTIME_MODEL;
   private lastAppliedPrompt: string | null = null;
-  // --- Local VAD gate ---
-  private audioCtx: AudioContext | null = null;
-  private vadNode: AudioWorkletNode | null = null;
-  private vadSource: MediaStreamAudioSourceNode | null = null;
-  private vadWorkletUrl: string | null = null;
-  private micTrack: MediaStreamTrack | null = null;
-  private speaking = false;
-  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
-  private static readonly VAD_HANGOVER_MS = 6_000;
+  // Local VAD gate removed: muting the outbound mic ate the "Comp-" head
+  // of the wake word, so Realtime never saw "computah". Keep the track hot
+  // and let OpenAI's server-side turn detection handle silence. A proper
+  // KWS (Porcupine/openWakeWord) can gate turn_detection later without
+  // dropping audio frames.
 
   constructor(cb: VoiceCallbacks) {
     this.cb = cb;
