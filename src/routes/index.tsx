@@ -583,6 +583,7 @@ function StagePage() {
   // --- Handle a fired gesture ---
   const handleGesture = useCallback(
     async (label: string, action: GestureAction) => {
+      haptic("tick");
       const sid = sessionIdRef.current;
       const uid = userIdRef.current;
       if (sid && uid) {
