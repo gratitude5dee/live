@@ -45,10 +45,21 @@ export class DepthEngine {
   private raf: number | null = null;
   private inFlight = false;
   private stopped = false;
+  private paused = false;
   private source: HTMLVideoElement | null = null;
   private opts: Required<DepthAttachOptions>;
   private firstFrameResolve: (() => void) | null = null;
   readonly firstFrame: Promise<void>;
+  // Hoisted paint buffers — reused across frames to avoid ~24Hz allocation
+  // churn. Reallocated only when the model output dimensions change.
+  private paintTmpCanvas: HTMLCanvasElement | null = null;
+  private paintTmpCtx: CanvasRenderingContext2D | null = null;
+  private paintImageData: ImageData | null = null;
+  private paintDims: { w: number; h: number } | null = null;
+  // Temporal EMA on min/max keeps background brightness stable when someone
+  // walks across the scene (per-frame normalization otherwise pumps).
+  private emaMin: number | null = null;
+  private emaMax: number | null = null;
 
 
   constructor(opts: DepthAttachOptions = {}) {
