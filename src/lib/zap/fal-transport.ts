@@ -1,10 +1,13 @@
 import { fal } from "@fal-ai/client";
 import { mintFalRealtimeToken } from "@/lib/fal-token.functions";
 
+export type TransportConnState = "connecting" | "connected" | "reconnecting" | "failed";
+
 type TransportCallbacks = {
   onOutputStream: (stream: MediaStream) => void;
   onTransportChosen: (t: "webrtc") => void;
   onError: (e: unknown) => void;
+  onStateChange?: (s: TransportConnState) => void;
 };
 
 export type TransportSend = (payload: {
