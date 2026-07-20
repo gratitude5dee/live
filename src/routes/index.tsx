@@ -1505,6 +1505,8 @@ function StagePage() {
       setApplied(next);
     }
     toast("Reference cleared");
+    playSfx("droplet");
+
   }, [enhance]);
 
   const applyRefImage = useCallback(() => {
