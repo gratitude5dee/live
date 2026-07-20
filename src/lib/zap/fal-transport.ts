@@ -254,8 +254,8 @@ export class VideoTransport {
         if (!sdp) throw new Error("WebRTC offer was empty");
         connection.send({ type: "offer", sdp });
         this.connectTimeout = setTimeout(() => {
-          if (pc.connectionState !== "connected") {
-            this.cb.onError(new Error("Lucy did not establish a media connection"));
+          if (pc.connectionState !== "connected" && !this.reconnecting && !this.closed) {
+            void this.attemptReconnect();
           }
         }, 20_000);
       };
