@@ -1712,6 +1712,11 @@ function StagePage() {
     })();
   }, [facingMode, syncOutboundSource]);
 
+  // Bridge flipCamera into the ref used by handleVoiceToolCall (declared earlier).
+  useEffect(() => {
+    flipCameraRef.current = flipCamera;
+  }, [flipCamera]);
+
   if (connState === "idle") {
     return (
       <>
