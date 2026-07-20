@@ -170,6 +170,7 @@ export default function LandingHero({ onEnter, disabled }: LandingHeroProps) {
             >
               <button
                 onClick={onEnter}
+                onPointerDown={armWarm}
                 disabled={disabled}
                 className="group flex h-full w-full items-center justify-center gap-3 rounded-full px-6 text-base font-medium text-white disabled:opacity-50"
               >
