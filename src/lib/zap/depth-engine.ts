@@ -186,12 +186,33 @@ export class DepthEngine {
       if (d > rawMax) rawMax = d;
     }
     if (!Number.isFinite(rawMin) || !Number.isFinite(rawMax)) return;
+    if (rawMax <= rawMin) rawMax = rawMin + 1e-4;
+
     // Temporal EMA — kills the "walk-through-frame" brightness pump.
-    const alpha = 0.1;
-    this.emaMin = this.emaMin === null ? rawMin : this.emaMin * (1 - alpha) + rawMin * alpha;
-    this.emaMax = this.emaMax === null ? rawMax : this.emaMax * (1 - alpha) + rawMax * alpha;
+    // Snap-reset when raw range diverges from the smoothed range by >2×
+    // (fast scene change) to avoid dead-flat frames.
+    const alpha = 0.25;
+    const rawRange = rawMax - rawMin;
+    const smoothedRange =
+      this.emaMin !== null && this.emaMax !== null ? this.emaMax - this.emaMin : rawRange;
+    const diverged =
+      this.emaMin === null ||
+      rawRange > smoothedRange * 2 ||
+      rawRange < smoothedRange / 2;
+    if (diverged) {
+      this.emaMin = rawMin;
+      this.emaMax = rawMax;
+    } else {
+      this.emaMin = this.emaMin! * (1 - alpha) + rawMin * alpha;
+      this.emaMax = this.emaMax! * (1 - alpha) + rawMax * alpha;
+    }
+    // Guarantee a positive, non-inverted range.
+    if (this.emaMax <= this.emaMin) {
+      this.emaMin = rawMin;
+      this.emaMax = rawMax;
+    }
     const min = this.emaMin;
-    const range = (this.emaMax - this.emaMin) || 1;
+    const range = Math.max(this.emaMax - this.emaMin, 1e-4);
 
     // Hoisted paint buffers — only reallocated when output dims change.
     if (!this.paintDims || this.paintDims.w !== w || this.paintDims.h !== h) {
@@ -208,12 +229,26 @@ export class DepthEngine {
     const src = this.paintImageData!;
     const sd = src.data;
     for (let i = 0; i < data.length; i++) {
-      const g = Math.round(((data[i] - min) / range) * 255);
+      let g = Math.round(((data[i] - min) / range) * 255);
+      if (g < 0) g = 0;
+      else if (g > 255) g = 255;
       const j = i * 4;
       sd[j] = g;
       sd[j + 1] = g;
       sd[j + 2] = g;
       sd[j + 3] = 255;
+    }
+    // Match the output canvas aspect to the current source video —
+    // hot-swapping a portrait depth stream onto a landscape sender otherwise
+    // makes Lucy render letterboxed / stretched.
+    const v = this.source;
+    if (v && v.videoWidth > 0 && v.videoHeight > 0) {
+      const targetH = this.opts.targetHeight;
+      const targetW = Math.round((targetH * v.videoWidth) / v.videoHeight);
+      if (this.canvas.width !== targetW || this.canvas.height !== targetH) {
+        this.canvas.width = targetW;
+        this.canvas.height = targetH;
+      }
     }
     this.paintTmpCtx!.putImageData(src, 0, 0);
     const cw = this.canvas.width;
