@@ -1582,7 +1582,8 @@ function StagePage() {
       undo,
       clearPrompt,
       toggleRecord,
-      flipCamera,
+      // flipCamera reached via flipCameraRef to avoid TDZ
+
       stopSession,
       presets,
       applyPreset,
