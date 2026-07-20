@@ -78,15 +78,11 @@ export class VoiceAgent {
   private dispatchedInResponse = false;
   private model = OPENAI_REALTIME_MODEL;
   private lastAppliedPrompt: string | null = null;
-  // --- Local VAD gate ---
-  private audioCtx: AudioContext | null = null;
-  private vadNode: AudioWorkletNode | null = null;
-  private vadSource: MediaStreamAudioSourceNode | null = null;
-  private vadWorkletUrl: string | null = null;
-  private micTrack: MediaStreamTrack | null = null;
-  private speaking = false;
-  private silenceTimer: ReturnType<typeof setTimeout> | null = null;
-  private static readonly VAD_HANGOVER_MS = 6_000;
+  // Local VAD gate removed: muting the outbound mic ate the "Comp-" head
+  // of the wake word, so Realtime never saw "computah". Keep the track hot
+  // and let OpenAI's server-side turn detection handle silence. A proper
+  // KWS (Porcupine/openWakeWord) can gate turn_detection later without
+  // dropping audio frames.
 
   constructor(cb: VoiceCallbacks) {
     this.cb = cb;
@@ -117,12 +113,9 @@ export class VoiceAgent {
       const pc = new RTCPeerConnection();
       this.pc = pc;
       const audioTrack = mic.getAudioTracks()[0];
-      this.micTrack = audioTrack;
-      // Local VAD gate: keep the OpenAI mic muted until sustained speech is
-      // heard, then unmute. Re-mute after VAD_HANGOVER_MS of silence.
-      audioTrack.enabled = false;
+      // Keep the mic hot — server-side turn detection handles silence.
+      audioTrack.enabled = true;
       pc.addTrack(audioTrack, mic);
-      void this.startVad(mic).catch((e) => console.warn("vad init failed", e));
       // No pc.ontrack — text-only session; no remote audio pipeline.
       pc.onconnectionstatechange = () => {
         if (
@@ -378,104 +371,6 @@ export class VoiceAgent {
     });
   }
 
-  /**
-   * Local VAD gate. Runs an AudioWorklet on the mic capture graph that emits
-   * an RMS level per ~128-sample block. When sustained energy crosses the
-   * threshold we unmute the OpenAI mic track; VAD_HANGOVER_MS after the last
-   * energetic block we mute again. This keeps the OpenAI upstream silent
-   * unless the user is actually talking — privacy + fewer billed VAD turns.
-   */
-  private async startVad(mic: MediaStream): Promise<void> {
-    if (typeof AudioContext === "undefined") return;
-    const workletSrc = `
-      class VadProcessor extends AudioWorkletProcessor {
-        constructor() {
-          super();
-          this._lastPost = 0;
-        }
-        process(inputs) {
-          const input = inputs[0];
-          if (!input || !input[0]) return true;
-          const ch = input[0];
-          let sum = 0;
-          for (let i = 0; i < ch.length; i++) sum += ch[i] * ch[i];
-          const rms = Math.sqrt(sum / ch.length);
-          // Post at most every ~30ms to keep the main thread cheap.
-          const now = currentTime * 1000;
-          if (now - this._lastPost > 30) {
-            this._lastPost = now;
-            this.port.postMessage(rms);
-          }
-          return true;
-        }
-      }
-      registerProcessor('vad-processor', VadProcessor);
-    `;
-    const blob = new Blob([workletSrc], { type: "application/javascript" });
-    this.vadWorkletUrl = URL.createObjectURL(blob);
-    const ctx = new AudioContext();
-    this.audioCtx = ctx;
-    await ctx.audioWorklet.addModule(this.vadWorkletUrl);
-    const src = ctx.createMediaStreamSource(mic);
-    this.vadSource = src;
-    const node = new AudioWorkletNode(ctx, "vad-processor");
-    this.vadNode = node;
-    // Threshold tuned for noise-suppressed browser input; ~ -32 dBFS.
-    const THRESH = 0.025;
-    node.port.onmessage = (ev: MessageEvent<number>) => {
-      if (this.closed || !this.micTrack) return;
-      const rms = typeof ev.data === "number" ? ev.data : 0;
-      if (rms >= THRESH) {
-        if (!this.speaking) {
-          this.speaking = true;
-          this.micTrack.enabled = true;
-        }
-        if (this.silenceTimer) {
-          clearTimeout(this.silenceTimer);
-          this.silenceTimer = null;
-        }
-        this.silenceTimer = setTimeout(() => {
-          if (this.closed || !this.micTrack) return;
-          this.speaking = false;
-          this.micTrack.enabled = false;
-        }, VoiceAgent.VAD_HANGOVER_MS);
-      }
-    };
-    src.connect(node);
-    // Do NOT connect to destination — we don't want to hear ourselves.
-  }
-
-  private stopVad(): void {
-    if (this.silenceTimer) {
-      clearTimeout(this.silenceTimer);
-      this.silenceTimer = null;
-    }
-    try {
-      this.vadNode?.port.close();
-      this.vadNode?.disconnect();
-    } catch {
-      /* ignore */
-    }
-    this.vadNode = null;
-    try {
-      this.vadSource?.disconnect();
-    } catch {
-      /* ignore */
-    }
-    this.vadSource = null;
-    try {
-      void this.audioCtx?.close();
-    } catch {
-      /* ignore */
-    }
-    this.audioCtx = null;
-    if (this.vadWorkletUrl) {
-      URL.revokeObjectURL(this.vadWorkletUrl);
-      this.vadWorkletUrl = null;
-    }
-    this.speaking = false;
-    this.micTrack = null;
-  }
 
   close(): void {
     this.closed = true;
@@ -483,7 +378,7 @@ export class VoiceAgent {
       clearTimeout(this.idleTimer);
       this.idleTimer = null;
     }
-    this.stopVad();
+    
     try {
       this.dc?.close();
     } catch {

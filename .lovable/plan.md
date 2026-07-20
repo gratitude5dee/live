@@ -1,37 +1,31 @@
-# Fix: MediaPipe overlay misaligned in camera PiP
+# Fix: "Computah" wake word never fires
 
 ## Diagnosis (confirmed)
 
-The overlay canvas is doing two things wrong, both visible in the screenshot where the face mesh floats off the face and the hand skeleton drifts down-left of the actual hand:
+I added a local VAD gate in the last turn (`src/lib/zap/voice-agent.ts` lines 81-446). It sets `audioTrack.enabled = false` at startup and only flips it on after the RMS worklet sees ~30 ms above `THRESH = 0.025` (~-32 dBFS). Two problems, either of which is enough to eat every wake word:
 
-1. **Wrong coordinate space.** `runInferenceLoop` in `src/routes/index.tsx` (lines ~1039-1066) redraws the camera frame into the overlay canvas with `object-cover` cropping (`s = max(targetW/vw, targetH/vh)`, offset by `(targetW-dw)/2, (targetH-dh)/2`), then calls `drawHandOverlay` / `drawFaceOverlay` which multiply normalized landmark coords by the **full canvas W×H** (`src/lib/zap/overlay.ts`). The camera is 1280×720 (landscape), the PiP container is `aspect-[3/4]` (portrait), so `object-cover` crops off ~62% of the horizontal frame — landmarks end up horizontally squashed and shifted off the face.
+1. **Head-of-utterance loss.** By the time RMS crosses threshold, the speaker is already ~100-200 ms into "Comp-". Those samples were sent as silence to OpenAI, so the model hears "…utah, make the crown gold" — the wake pattern is gone and the classifier never routes. This is the failure the user is describing.
+2. **Threshold too high with browser noise suppression.** Chrome/Safari `getUserMedia` defaults apply AGC + noise suppression, which pulls conversational speech down to ~0.01-0.02 RMS. A 0.025 gate frequently never opens at all in quiet rooms — the mic stays muted the entire session.
 
-2. **Redundant video paint.** The `<video>` element already renders the feed under the canvas via CSS `object-cover -scale-x-100`. Redrawing the same frame into the canvas underneath the landmarks wastes fill-rate and, worse, hides that the landmark space is wrong (it makes the overlay+video look self-consistent but drift from the real `<video>` behind).
+The rest of the voice stack (WebRTC transport, tool routing, `control_session`, follow-up merge, HUD hints) is fine and doesn't need to change.
 
 ## Fix
 
-Change the paint pipeline so the canvas draws landmarks only, in the same cropped/mirrored space the `<video>` element uses.
+Remove the VAD gate. It was a cost/privacy optimization that broke the primary product loop; correct thing is to revert it and revisit later with a real keyword-spotter (Porcupine/openWakeWord) that runs *without* muting the outbound track.
 
-### `src/lib/zap/overlay.ts`
-- Add an optional `rect` argument `{ dx, dy, dw, dh }` to `drawHandOverlay`, `drawFaceOverlay`, and the internal `strokeConnectors`. When present, map normalized coords as `dx + x*dw`, `dy + y*dh` instead of `x*W`, `y*H`. Default (no rect) keeps current behavior for any other caller.
+### `src/lib/zap/voice-agent.ts`
 
-### `src/routes/index.tsx` (inference loop, ~1039-1066)
-- Stop drawing the video into the overlay canvas — remove the `ctx.drawImage(v, ...)` block.
-- Compute the object-cover rect for the current video against the canvas box:
+- Delete `startVad`, `stopVad`, and the VAD-related fields (`vadNode`, `vadSource`, `vadWorkletUrl`, `audioCtx`, `micTrack`, `speaking`, `silenceTimer`, `VAD_HANGOVER_MS`).
+- In the mic setup path, keep `audioTrack.enabled = true` (default) and stop calling `startVad(mic)`.
+- Clean up any leftover references in `close()` so we don't try to revoke a URL or disconnect nodes that no longer exist.
 
-```text
-s  = max(targetW / vw, targetH / vh)
-dw = vw * s;  dh = vh * s
-dx = (targetW - dw) / 2
-dy = (targetH - dh) / 2
-```
-
-- Pass that rect into `drawHandOverlay` and `drawFaceOverlay`. The canvas already carries the same `-scale-x-100` CSS as the video, so mirroring stays consistent (no code change needed there).
-
-### No changes needed
-- `DesktopStage.tsx` / `MobileStage.tsx` PiP markup — the CSS mirror + `object-cover` on the `<video>` and canvas already agree; only the landmark math was wrong.
-- Handedness label logic in `drawHandOverlay` stays as-is (mirror-aware).
+### No other files change
+- `voice-intent.ts`, `routes/index.tsx`, HUD hint chip, and the `control_session` tool all stay as-is. Follow-up merge and ack behavior are unaffected.
 
 ## Verification
-- Rebuild, open `/`, start a session, wave a hand and tilt the face — the skeleton and face mesh should track the actual features in the PiP.
-- Confirm both desktop (aspect 3/4 PiP) and mobile (portrait full-bleed camera) look correct, since both use the same overlay canvas via `overlayRef`.
+- Rebuild, arm Computah, say "Computah, make the background a beach." — HUD should flash the ack and Lucy should receive the prompt within a couple seconds.
+- Try 3-4 wake attempts in a row (including "computer" and mispronunciations) to confirm the phonetic fallback in `voice-intent.ts` still catches them.
+- Watch the network tab: OpenAI Realtime should show a `response.created` shortly after each utterance, no dead silence sessions.
+
+## Follow-up (not in this change)
+When we want the mute-savings back, do it right: run a KWS model (Porcupine "computer" preset or a compiled openWakeWord "computah" model) in a worklet, keep the outbound mic **enabled** at all times, and only *drop* audio frames server-side is not an option — instead use the KWS trigger to send a `session.update` that arms/disarms `turn_detection`. That preserves head-of-utterance and still avoids paid VAD turns during silence.
