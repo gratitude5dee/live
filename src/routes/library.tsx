@@ -866,14 +866,17 @@ function LedgerList({
                   <IconDownload className="h-3.5 w-3.5" />
                 </a>
               )}
-              <button
-                onClick={() => onDelete(t)}
-                className="grid h-8 w-8 place-items-center rounded-full text-white/50 ring-1 ring-transparent transition-all duration-300 hover:bg-rose-500/15 hover:text-rose-200 hover:ring-rose-400/25"
-                style={{ transitionTimingFunction: EASE }}
-                title="Delete"
-              >
-                <IconTrash className="h-3.5 w-3.5" />
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={() => onDelete(t)}
+                  className="grid h-8 w-8 place-items-center rounded-full text-white/50 ring-1 ring-transparent transition-all duration-300 hover:bg-rose-500/15 hover:text-rose-200 hover:ring-rose-400/25"
+                  style={{ transitionTimingFunction: EASE }}
+                  title="Delete"
+                >
+                  <IconTrash className="h-3.5 w-3.5" />
+                </button>
+              )}
+
             </div>
           </div>
         );
