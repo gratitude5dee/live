@@ -278,6 +278,7 @@ export default function MobileStage(p: StageViewProps) {
               "{p.voiceTranscript}"
             </div>
           )}
+          <VoiceHintChip active={p.voiceState === "armed"} />
         </div>
       )}
 
