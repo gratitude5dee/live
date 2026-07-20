@@ -67,6 +67,14 @@
   padding: 0;
 }
 
+.bubble-menu .sfx-btn {
+  color: #fff;
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+.bubble-menu .sfx-btn:hover { transform: scale(1.06); color: #cbe5ff; }
+.bubble-menu .sfx-btn[aria-pressed="false"] { color: rgba(255,255,255,0.45); }
+
+
 .bubble-menu .bubble-logo {
   max-height: 92%;
   max-width: 100%;
