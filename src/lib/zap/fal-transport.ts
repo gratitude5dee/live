@@ -96,6 +96,7 @@ export class VideoTransport {
 
 
   async start() {
+    this.cb.onStateChange?.("connecting");
     await this.beginWebRTC([{ urls: "stun:stun.l.google.com:19302" }]);
   }
 
@@ -103,6 +104,60 @@ export class VideoTransport {
     this.lastPrompt = { ...payload };
     this.flushPrompt();
   };
+
+  /**
+   * Restart signaling + WebRTC without touching the outbound track or the
+   * cached `lastPrompt`. flushPrompt() re-sends the last look on `ontrack`
+   * so the visual state survives an ICE blip.
+   */
+  private reconnectAttempt = 0;
+  private reconnecting = false;
+  async attemptReconnect(): Promise<void> {
+    if (this.closed || this.reconnecting) return;
+    this.reconnecting = true;
+    try {
+      // Tear down peer connection but keep `this.inputStream` + callbacks
+      // + `lastPrompt` intact.
+      if (this.pc) {
+        try { this.pc.close(); } catch { /* ignore */ }
+        this.pc = null;
+      }
+      if (this.connection) {
+        try { this.connection.close(); } catch { /* ignore */ }
+        this.connection = null;
+      }
+      this.videoSender = null;
+      this.remoteDescriptionSet = false;
+      this.pendingRemoteCandidates = [];
+      if (this.connectTimeout) {
+        clearTimeout(this.connectTimeout);
+        this.connectTimeout = null;
+      }
+
+      const maxAttempts = 3;
+      for (let i = 0; i < maxAttempts; i++) {
+        if (this.closed) return;
+        this.reconnectAttempt = i + 1;
+        this.cb.onStateChange?.("reconnecting");
+        const backoff = 1000 * Math.pow(2, i);
+        await new Promise((r) => setTimeout(r, backoff));
+        if (this.closed) return;
+        try {
+          await this.beginWebRTC([{ urls: "stun:stun.l.google.com:19302" }]);
+          this.reconnectAttempt = 0;
+          return;
+        } catch (e) {
+          console.warn(`reconnect attempt ${i + 1} failed`, e);
+          if (i === maxAttempts - 1) {
+            this.cb.onStateChange?.("failed");
+            this.cb.onError(new Error("Lucy reconnect failed after 3 attempts"));
+          }
+        }
+      }
+    } finally {
+      this.reconnecting = false;
+    }
+  }
 
   private async beginWebRTC(iceServers: RTCIceServer[]) {
     try {
