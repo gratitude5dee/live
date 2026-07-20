@@ -1696,9 +1696,13 @@ function StagePage() {
       return;
     }
     const agent = new VoiceAgent({
-      onState: setVoiceState,
+      onState: (s) => {
+        setVoiceState(s);
+        if (s === "listening") playSfx("chime");
+      },
       onTranscript: (t) => setVoiceTranscript(t),
-      onAck: (w) => setVoiceAck(w),
+      onAck: (w) => { setVoiceAck(w); playSfx("tick"); },
+
       onToolCall: handleVoiceToolCall,
       onError: (e) => {
         console.warn("voice agent error", e);
