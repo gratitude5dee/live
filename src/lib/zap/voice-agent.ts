@@ -361,12 +361,129 @@ export class VoiceAgent {
     }, IDLE_MS);
   }
 
+  /**
+   * Push the currently visible edit into the model's context so a subsequent
+   * relative command ("make it redder", "now bigger") merges with, rather
+   * than fragments, the previous prompt. Fire-and-forget.
+   */
+  updateLastPrompt(prompt: string | null): void {
+    this.lastAppliedPrompt = prompt && prompt.trim() ? prompt.trim() : null;
+    this.send({
+      type: "session.update",
+      session: {
+        type: "realtime",
+        instructions:
+          COMPUTAH_INSTRUCTIONS + buildFollowUpContext(this.lastAppliedPrompt),
+      },
+    });
+  }
+
+  /**
+   * Local VAD gate. Runs an AudioWorklet on the mic capture graph that emits
+   * an RMS level per ~128-sample block. When sustained energy crosses the
+   * threshold we unmute the OpenAI mic track; VAD_HANGOVER_MS after the last
+   * energetic block we mute again. This keeps the OpenAI upstream silent
+   * unless the user is actually talking — privacy + fewer billed VAD turns.
+   */
+  private async startVad(mic: MediaStream): Promise<void> {
+    if (typeof AudioContext === "undefined") return;
+    const workletSrc = `
+      class VadProcessor extends AudioWorkletProcessor {
+        constructor() {
+          super();
+          this._lastPost = 0;
+        }
+        process(inputs) {
+          const input = inputs[0];
+          if (!input || !input[0]) return true;
+          const ch = input[0];
+          let sum = 0;
+          for (let i = 0; i < ch.length; i++) sum += ch[i] * ch[i];
+          const rms = Math.sqrt(sum / ch.length);
+          // Post at most every ~30ms to keep the main thread cheap.
+          const now = currentTime * 1000;
+          if (now - this._lastPost > 30) {
+            this._lastPost = now;
+            this.port.postMessage(rms);
+          }
+          return true;
+        }
+      }
+      registerProcessor('vad-processor', VadProcessor);
+    `;
+    const blob = new Blob([workletSrc], { type: "application/javascript" });
+    this.vadWorkletUrl = URL.createObjectURL(blob);
+    const ctx = new AudioContext();
+    this.audioCtx = ctx;
+    await ctx.audioWorklet.addModule(this.vadWorkletUrl);
+    const src = ctx.createMediaStreamSource(mic);
+    this.vadSource = src;
+    const node = new AudioWorkletNode(ctx, "vad-processor");
+    this.vadNode = node;
+    // Threshold tuned for noise-suppressed browser input; ~ -32 dBFS.
+    const THRESH = 0.025;
+    node.port.onmessage = (ev: MessageEvent<number>) => {
+      if (this.closed || !this.micTrack) return;
+      const rms = typeof ev.data === "number" ? ev.data : 0;
+      if (rms >= THRESH) {
+        if (!this.speaking) {
+          this.speaking = true;
+          this.micTrack.enabled = true;
+        }
+        if (this.silenceTimer) {
+          clearTimeout(this.silenceTimer);
+          this.silenceTimer = null;
+        }
+        this.silenceTimer = setTimeout(() => {
+          if (this.closed || !this.micTrack) return;
+          this.speaking = false;
+          this.micTrack.enabled = false;
+        }, VoiceAgent.VAD_HANGOVER_MS);
+      }
+    };
+    src.connect(node);
+    // Do NOT connect to destination — we don't want to hear ourselves.
+  }
+
+  private stopVad(): void {
+    if (this.silenceTimer) {
+      clearTimeout(this.silenceTimer);
+      this.silenceTimer = null;
+    }
+    try {
+      this.vadNode?.port.close();
+      this.vadNode?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    this.vadNode = null;
+    try {
+      this.vadSource?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    this.vadSource = null;
+    try {
+      void this.audioCtx?.close();
+    } catch {
+      /* ignore */
+    }
+    this.audioCtx = null;
+    if (this.vadWorkletUrl) {
+      URL.revokeObjectURL(this.vadWorkletUrl);
+      this.vadWorkletUrl = null;
+    }
+    this.speaking = false;
+    this.micTrack = null;
+  }
+
   close(): void {
     this.closed = true;
     if (this.idleTimer) {
       clearTimeout(this.idleTimer);
       this.idleTimer = null;
     }
+    this.stopVad();
     try {
       this.dc?.close();
     } catch {
