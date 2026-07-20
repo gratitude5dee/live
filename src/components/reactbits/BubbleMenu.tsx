@@ -7,6 +7,8 @@ import {
 } from "react";
 import { gsap } from "gsap";
 import "./BubbleMenu.css";
+import { useSfxEnabled, play } from "@/lib/sfx";
+
 
 export interface BubbleMenuItem {
   label: string;
@@ -163,17 +165,20 @@ export default function BubbleMenu({
             </span>
           )}
         </div>
+        <SfxToggleBubble />
         <button
           type="button"
           className={`bubble toggle-bubble menu-btn ${isMenuOpen ? "open" : ""}`}
           onClick={handleToggle}
           aria-label={menuAriaLabel}
           aria-pressed={isMenuOpen}
+          data-cuelume-press
         >
           <span className="menu-line" />
           <span className="menu-line" />
         </button>
       </nav>
+
 
       {showOverlay && (
         <div
