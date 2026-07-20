@@ -936,13 +936,21 @@ function StagePage() {
     }
   }, [applyPrompt, applyPreset, clearPrompt, handleGesture, presets, undo, stopSession, syncOutboundSource]);
 
-  // --- MediaPipe inference loop (single rAF, both engines, adaptive rate) ---
+  // --- MediaPipe inference loop (wall-clock scheduled, both engines) ---
+  // Frame-based cadence made gesture holds land at 200ms on a 120Hz iPhone
+  // and 800ms on a throttled Android — different UX per device. Time-base
+  // ~15Hz for each engine so REQUIRED_STREAK_MS in GestureEngine means the
+  // same wall-clock duration everywhere.
   const runInferenceLoop = useCallback(() => {
-    let frame = 0;
-    let slowStreak = 0;
-    let everyN = 2;
-    let last = performance.now();
+    const GESTURE_INTERVAL_MS = 66;   // ~15Hz gesture inference
+    const FACE_INTERVAL_MS = 66;      // ~15Hz face inference
+    const PIP_INTERVAL_MS = 66;       // ~15Hz PiP repaint (mobile PiP is ~96px)
+    let lastGesture = 0;
+    let lastFace = 0;
+    let lastPip = 0;
     let lastTimestamp = 0;
+    let slowStreak = 0;
+    let last = performance.now();
     let fatal = false;
     const loop = () => {
       if (fatal) return;
@@ -950,14 +958,12 @@ function StagePage() {
         inferenceFrameRef.current = requestAnimationFrame(loop);
         return;
       }
-      frame++;
       const now = performance.now();
       const dt = now - last;
       last = now;
       if (dt > 33) {
         slowStreak++;
-        if (slowStreak > 60 && everyN === 2) {
-          everyN = 3;
+        if (slowStreak > 60 && !perfModeRef.current) {
           perfModeRef.current = true;
           setPerfMode(true);
         }
@@ -965,26 +971,24 @@ function StagePage() {
         slowStreak = Math.max(0, slowStreak - 1);
       }
 
-      if (
-        frame % everyN === 0 &&
-        inputVideoRef.current.readyState >= 2 &&
-        inputVideoRef.current.videoWidth > 0
-      ) {
-        const ts = Math.max(lastTimestamp + 1, Math.round(performance.now()));
-        lastTimestamp = ts;
-        // MediaPipe tasks share WASM resources. Alternate them rather than
-        // invoking two task graphs against the same video frame back-to-back.
-        const runGesture = frame % (everyN * 2) === 0;
+      const v = inputVideoRef.current;
+      const videoReady = v.readyState >= 2 && v.videoWidth > 0;
+      if (videoReady) {
+        const nextTs = () => {
+          const ts = Math.max(lastTimestamp + 1, Math.round(performance.now()));
+          lastTimestamp = ts;
+          return ts;
+        };
         try {
-          if (runGesture && gestureRef.current && engineRef.current) {
-            const result = gestureRef.current.recognizeForVideo(
-              inputVideoRef.current,
-              ts,
-            );
+          if (now - lastGesture >= GESTURE_INTERVAL_MS && gestureRef.current && engineRef.current) {
+            lastGesture = now;
+            const result = gestureRef.current.recognizeForVideo(v, nextTs());
             engineRef.current.ingest(result);
             lastGestureResultRef.current = result;
-          } else if (!runGesture && faceRef.current && faceEngineRef.current) {
-            const fr = faceRef.current.detectForVideo(inputVideoRef.current, ts);
+          }
+          if (now - lastFace >= FACE_INTERVAL_MS && faceRef.current && faceEngineRef.current) {
+            lastFace = now;
+            const fr = faceRef.current.detectForVideo(v, nextTs());
             faceEngineRef.current.ingest(fr);
           }
         } catch (e) {
@@ -993,24 +997,35 @@ function StagePage() {
           if (message.includes("memory access out of bounds")) fatal = true;
         }
 
-        // Paint the camera into canvas as a compositing-safe PiP, then overlay
-        // the hand visualization. Some browsers render live video as a black
-        // hardware layer even while canvas/MediaPipe can read its frames.
+        // Repaint PiP at CSS-box resolution, not the 1280×720 camera source.
+        // Also skip entirely when the PiP element has no layout box (HUD
+        // hidden, panel unmounted) — saves ~50× fill-rate on mobile.
         const oc = overlayRef.current;
-        if (oc) {
-          const v = inputVideoRef.current;
-          const w = v.videoWidth || 640;
-          const h = v.videoHeight || 360;
-          if (oc.width !== w) oc.width = w;
-          if (oc.height !== h) oc.height = h;
-          const ctx = oc.getContext("2d");
-          if (ctx) {
-            ctx.save();
-            ctx.clearRect(0, 0, w, h);
-            ctx.drawImage(v, 0, 0, w, h);
-            ctx.restore();
-            drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
-            drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+        if (oc && now - lastPip >= PIP_INTERVAL_MS) {
+          lastPip = now;
+          const cssW = oc.clientWidth;
+          const cssH = oc.clientHeight;
+          if (cssW > 0 && cssH > 0) {
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            const targetW = Math.round(cssW * dpr);
+            const targetH = Math.round(cssH * dpr);
+            if (oc.width !== targetW) oc.width = targetW;
+            if (oc.height !== targetH) oc.height = targetH;
+            const ctx = oc.getContext("2d");
+            if (ctx) {
+              ctx.save();
+              ctx.clearRect(0, 0, targetW, targetH);
+              // Object-cover: scale to fill and center-crop
+              const vw = v.videoWidth;
+              const vh = v.videoHeight;
+              const s = Math.max(targetW / vw, targetH / vh);
+              const dw = vw * s;
+              const dh = vh * s;
+              ctx.drawImage(v, (targetW - dw) / 2, (targetH - dh) / 2, dw, dh);
+              ctx.restore();
+              drawHandOverlay(ctx, lastGestureResultRef.current, lastHoldRef.current);
+              drawFaceOverlay(ctx, faceEngineRef.current?.lastResult ?? null);
+            }
           }
         }
       }
