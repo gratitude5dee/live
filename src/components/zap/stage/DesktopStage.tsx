@@ -171,6 +171,7 @@ export default function DesktopStage(p: StageViewProps) {
               "{p.voiceTranscript}"
             </div>
           )}
+          <VoiceHintChip active={p.voiceState === "armed"} />
         </div>
       )}
 
