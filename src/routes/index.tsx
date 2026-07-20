@@ -1268,7 +1268,7 @@ function StagePage() {
       if (wasAuto) {
         const url = URL.createObjectURL(blob);
         setDownload({ url, filename });
-        playSfx("shimmer");
+        playSfx("success");
       }
       uploadTake(blob, "video", dur, { autoDownload: !wasAuto, ext });
       setRecording(false);
