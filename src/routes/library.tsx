@@ -1115,9 +1115,10 @@ function CommandBar({
   count: number;
   onDownload: () => void;
   onDownloadZip: () => void;
-  onDelete: () => void;
+  onDelete?: () => void;
   onClear: () => void;
 }) {
+
   return (
     <div
       className="fixed inset-x-0 bottom-6 z-50 mx-auto flex w-fit max-w-[calc(100vw-24px)] items-center gap-1 rounded-full border border-white/12 bg-black/75 p-1.5 pl-3 shadow-[0_30px_80px_-30px_rgba(0,0,0,0.9)] backdrop-blur-2xl"
