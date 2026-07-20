@@ -792,9 +792,18 @@ function StagePage() {
       vb.start();
       visionBufRef.current = vb;
 
-      // Start MediaPipe (best-effort)
+      // Start MediaPipe (best-effort). Prefer any pre-warmed instances
+      // kicked off from the landing hero — those overlap the getUserMedia
+      // permission prompt so they cost ~0ms on Enter.
+      let warmed: { gesture?: import("@mediapipe/tasks-vision").GestureRecognizer; face?: import("@mediapipe/tasks-vision").FaceLandmarker } | null = null;
       try {
-        const rec = await loadGestureRecognizer();
+        const p = takeWarmedVision();
+        if (p) warmed = await p;
+      } catch (e) {
+        console.warn("warm vision failed", e);
+      }
+      try {
+        const rec = warmed?.gesture ?? (await loadGestureRecognizer());
         gestureRef.current = rec;
         const engine = new GestureEngine();
         engine.onFire = (label, action) => {
@@ -810,7 +819,7 @@ function StagePage() {
       }
 
       try {
-        const fl = await loadFaceLandmarker();
+        const fl = warmed?.face ?? (await loadFaceLandmarker());
         faceRef.current = fl;
         const fe = new FaceEngine();
         fe.onReactive = (action, label, score) =>
