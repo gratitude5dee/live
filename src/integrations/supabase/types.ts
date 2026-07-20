@@ -20,6 +20,7 @@ export type Database = {
           emoji: string
           expand: boolean
           id: number
+          input_hint: string | null
           kind: string
           name: string
           prompt: string
@@ -35,6 +36,7 @@ export type Database = {
           emoji: string
           expand?: boolean
           id?: never
+          input_hint?: string | null
           kind?: string
           name: string
           prompt: string
@@ -50,6 +52,7 @@ export type Database = {
           emoji?: string
           expand?: boolean
           id?: never
+          input_hint?: string | null
           kind?: string
           name?: string
           prompt?: string
