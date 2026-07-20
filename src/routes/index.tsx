@@ -523,9 +523,24 @@ function StagePage() {
           : preset.template_key === "gesture_fx"
           ? "gesture_fx"
           : "other";
+      // Depth-tagged presets need the WebGPU depth stream as Lucy's input.
+      // Auto-enable when off; if WebGPU is unavailable, fall through and let
+      // the prompt run against the raw camera feed.
+      const hint = (preset as unknown as { input_hint?: string | null }).input_hint;
+      if (hint === "depth" && !depthOnRef.current) {
+        if (depthAvailable) {
+          try {
+            await toggleDepth();
+          } catch (e) {
+            console.warn("depth auto-toggle failed", e);
+          }
+        } else {
+          toast("Depth needs WebGPU — running on raw feed");
+        }
+      }
       await applyPrompt(preset.prompt, source, ref, { preset });
     },
-    [applyPrompt, refImage, presets, loadPresetRef],
+    [applyPrompt, refImage, presets, loadPresetRef, depthAvailable, toggleDepth],
   );
 
   const applyTemplate = useCallback(
