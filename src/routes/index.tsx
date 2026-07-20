@@ -430,7 +430,7 @@ function StagePage() {
       let fusedText = text;
       const eng = engineRef.current;
       const tipFresh =
-        eng?.pointingTip && performance.now() - eng.pointingTipAt < 400
+        eng?.pointingTip && performance.now() - eng.pointingTipAt < 800
           ? eng.pointingTip
           : null;
       if (fusedText.includes("{{where}}")) {
