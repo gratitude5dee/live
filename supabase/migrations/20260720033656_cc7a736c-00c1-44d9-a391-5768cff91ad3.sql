@@ -1,0 +1,1 @@
+ALTER TABLE public.presets ADD COLUMN IF NOT EXISTS expand boolean NOT NULL DEFAULT false;
