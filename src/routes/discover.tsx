@@ -11,9 +11,9 @@ import { getReactorSetup } from "@/lib/happy-oyster/reactor-setup.functions";
 // would drag the ~1.7MB Reactor SDK into the Cloudflare Worker bundle, where
 // its browser-globals module-init crashes every request (500 across the
 // site). React.lazy defers the import until the browser mounts the route.
-const HappyOysterApp = lazy(() =>
-  import("@/components/happy-oyster/HappyOysterApp").then((m) => ({
-    default: m.HappyOysterApp,
+const FieldRoot = lazy(() =>
+  import("@/components/happy-oyster/field/FieldRoot").then((m) => ({
+    default: m.FieldRoot,
   })),
 );
 
