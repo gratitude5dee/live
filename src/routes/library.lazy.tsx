@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createLazyFileRoute, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { downloadZip } from "client-zip";
 import { play as playSfx } from "@/lib/sfx";
@@ -8,7 +8,7 @@ import type { TakeRow } from "@/lib/zap/types";
 import LiquidEther from "@/components/reactbits/LiquidEther";
 import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
 
-export const Route = createFileRoute("/library")({
+export const Route = createLazyFileRoute("/library")({
   ssr: false,
   head: () => ({
     meta: [

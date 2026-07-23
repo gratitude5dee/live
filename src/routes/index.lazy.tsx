@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import QRCode from "qrcode";
@@ -44,7 +44,7 @@ import type {
 } from "@mediapipe/tasks-vision";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
-export const Route = createFileRoute("/")({
+export const Route = createLazyFileRoute("/")({
   ssr: false,
   head: () => ({
     meta: [

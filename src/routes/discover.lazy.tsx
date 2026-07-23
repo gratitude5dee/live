@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 import { SetupRequired } from "@/components/happy-oyster/SetupRequired";
 import { getReactorSetup } from "@/lib/happy-oyster/reactor-setup.functions";
@@ -17,7 +17,7 @@ const FieldApp = lazy(() =>
   })),
 );
 
-export const Route = createFileRoute("/discover")({
+export const Route = createLazyFileRoute("/discover")({
   ssr: false,
   loader: () => getReactorSetup(),
   head: () => ({

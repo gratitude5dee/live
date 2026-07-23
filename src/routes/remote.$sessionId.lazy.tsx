@@ -1,10 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Preset, RemoteMessage } from "@/lib/zap/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
-export const Route = createFileRoute("/remote/$sessionId")({
+export const Route = createLazyFileRoute("/remote/$sessionId")({
   ssr: false,
   head: () => ({
     meta: [
