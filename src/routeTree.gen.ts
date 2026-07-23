@@ -8,32 +8,29 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { createFileRoute } from '@tanstack/react-router'
-
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as LibraryRouteImport } from './routes/library'
+import { Route as DiscoverRouteImport } from './routes/discover'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as RemoteSessionIdRouteImport } from './routes/remote.$sessionId'
 import { Route as ApiReactorTokenRouteImport } from './routes/api.reactor.token'
 
-const LibraryLazyRouteImport = createFileRoute('/library')()
-const DiscoverLazyRouteImport = createFileRoute('/discover')()
-const IndexLazyRouteImport = createFileRoute('/')()
-const RemoteSessionIdLazyRouteImport = createFileRoute('/remote/$sessionId')()
-
-const LibraryLazyRoute = LibraryLazyRouteImport.update({
+const LibraryRoute = LibraryRouteImport.update({
   id: '/library',
   path: '/library',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/library.lazy').then((d) => d.Route))
-const DiscoverLazyRoute = DiscoverLazyRouteImport.update({
+const DiscoverRoute = DiscoverRouteImport.update({
   id: '/discover',
   path: '/discover',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/discover.lazy').then((d) => d.Route))
-const IndexLazyRoute = IndexLazyRouteImport.update({
+const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any).lazy(() => import('./routes/index.lazy').then((d) => d.Route))
-const RemoteSessionIdLazyRoute = RemoteSessionIdLazyRouteImport.update({
+const RemoteSessionIdRoute = RemoteSessionIdRouteImport.update({
   id: '/remote/$sessionId',
   path: '/remote/$sessionId',
   getParentRoute: () => rootRouteImport,
@@ -47,25 +44,25 @@ const ApiReactorTokenRoute = ApiReactorTokenRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexLazyRoute
-  '/discover': typeof DiscoverLazyRoute
-  '/library': typeof LibraryLazyRoute
-  '/remote/$sessionId': typeof RemoteSessionIdLazyRoute
+  '/': typeof IndexRoute
+  '/discover': typeof DiscoverRoute
+  '/library': typeof LibraryRoute
+  '/remote/$sessionId': typeof RemoteSessionIdRoute
   '/api/reactor/token': typeof ApiReactorTokenRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexLazyRoute
-  '/discover': typeof DiscoverLazyRoute
-  '/library': typeof LibraryLazyRoute
-  '/remote/$sessionId': typeof RemoteSessionIdLazyRoute
+  '/': typeof IndexRoute
+  '/discover': typeof DiscoverRoute
+  '/library': typeof LibraryRoute
+  '/remote/$sessionId': typeof RemoteSessionIdRoute
   '/api/reactor/token': typeof ApiReactorTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
-  '/': typeof IndexLazyRoute
-  '/discover': typeof DiscoverLazyRoute
-  '/library': typeof LibraryLazyRoute
-  '/remote/$sessionId': typeof RemoteSessionIdLazyRoute
+  '/': typeof IndexRoute
+  '/discover': typeof DiscoverRoute
+  '/library': typeof LibraryRoute
+  '/remote/$sessionId': typeof RemoteSessionIdRoute
   '/api/reactor/token': typeof ApiReactorTokenRoute
 }
 export interface FileRouteTypes {
@@ -93,10 +90,10 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexLazyRoute: typeof IndexLazyRoute
-  DiscoverLazyRoute: typeof DiscoverLazyRoute
-  LibraryLazyRoute: typeof LibraryLazyRoute
-  RemoteSessionIdLazyRoute: typeof RemoteSessionIdLazyRoute
+  IndexRoute: typeof IndexRoute
+  DiscoverRoute: typeof DiscoverRoute
+  LibraryRoute: typeof LibraryRoute
+  RemoteSessionIdRoute: typeof RemoteSessionIdRoute
   ApiReactorTokenRoute: typeof ApiReactorTokenRoute
 }
 
@@ -106,28 +103,28 @@ declare module '@tanstack/react-router' {
       id: '/library'
       path: '/library'
       fullPath: '/library'
-      preLoaderRoute: typeof LibraryLazyRouteImport
+      preLoaderRoute: typeof LibraryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/discover': {
       id: '/discover'
       path: '/discover'
       fullPath: '/discover'
-      preLoaderRoute: typeof DiscoverLazyRouteImport
+      preLoaderRoute: typeof DiscoverRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof IndexLazyRouteImport
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/remote/$sessionId': {
       id: '/remote/$sessionId'
       path: '/remote/$sessionId'
       fullPath: '/remote/$sessionId'
-      preLoaderRoute: typeof RemoteSessionIdLazyRouteImport
+      preLoaderRoute: typeof RemoteSessionIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/reactor/token': {
@@ -141,12 +138,22 @@ declare module '@tanstack/react-router' {
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexLazyRoute: IndexLazyRoute,
-  DiscoverLazyRoute: DiscoverLazyRoute,
-  LibraryLazyRoute: LibraryLazyRoute,
-  RemoteSessionIdLazyRoute: RemoteSessionIdLazyRoute,
+  IndexRoute: IndexRoute,
+  DiscoverRoute: DiscoverRoute,
+  LibraryRoute: LibraryRoute,
+  RemoteSessionIdRoute: RemoteSessionIdRoute,
   ApiReactorTokenRoute: ApiReactorTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
