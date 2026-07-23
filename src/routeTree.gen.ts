@@ -19,22 +19,24 @@ const LibraryRoute = LibraryRouteImport.update({
   id: '/library',
   path: '/library',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/library.lazy').then((d) => d.Route))
 const DiscoverRoute = DiscoverRouteImport.update({
   id: '/discover',
   path: '/discover',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/discover.lazy').then((d) => d.Route))
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() => import('./routes/index.lazy').then((d) => d.Route))
 const RemoteSessionIdRoute = RemoteSessionIdRouteImport.update({
   id: '/remote/$sessionId',
   path: '/remote/$sessionId',
   getParentRoute: () => rootRouteImport,
-} as any)
+} as any).lazy(() =>
+  import('./routes/remote.$sessionId.lazy').then((d) => d.Route),
+)
 const ApiReactorTokenRoute = ApiReactorTokenRouteImport.update({
   id: '/api/reactor/token',
   path: '/api/reactor/token',
