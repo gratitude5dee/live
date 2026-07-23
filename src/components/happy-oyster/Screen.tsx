@@ -1,3 +1,4 @@
+"use client";
 
 // The content screen — the app's fixed sandbox, reserved for the world:
 // every view renders into the same plain frame the travel video plays in
@@ -5,7 +6,7 @@
 // plays on top.
 
 import type { ReactNode } from "react";
-import type { JourneyStep } from "@/lib/happy-oyster/view";
+import type { JourneyStep } from "@/lib/view";
 import { useVideoSlot } from "./ho-client";
 import type { WorldSession } from "./use-world-session";
 import { Eyebrow, Spinner, WorldIdChip } from "./ui";

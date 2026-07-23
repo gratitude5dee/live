@@ -1,3 +1,4 @@
+"use client";
 
 // Adventure (mode 1) control deck. Movement is held state: every key is tracked
 // independently so chords compose — W+A resolves to the protocol's Front_Left
