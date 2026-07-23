@@ -1,4 +1,3 @@
-
 // One client surface.
 //
 // Every screen in this app talks to `useHappyOysterClient()`, never to the SDK
@@ -90,9 +89,12 @@ export function useVideoSlot(): ReactNode {
 // Local mode talks to a model served by the Reactor runtime on your own host
 // (adventure on :8080, directing on :8081), skipping the Coordinator: connect()
 // takes no JWT and there is no /tokens exchange. `local` lets the SDK pick the
-// right per-mode port; an explicit NEXT_PUBLIC_COORDINATOR_URL always wins.
+// right per-mode port; an explicit VITE_COORDINATOR_URL always wins.
+// (Vite build: import.meta.env.VITE_* replaces Next's process.env.NEXT_PUBLIC_*.)
 const LOCAL_RUNTIME = import.meta.env.VITE_HO_LOCAL_RUNTIME === "1";
-const COORDINATOR_URL = import.meta.env.VITE_COORDINATOR_URL as string | undefined;
+const COORDINATOR_URL = import.meta.env.VITE_COORDINATOR_URL as
+  | string
+  | undefined;
 
 // The Reactor connection options, minus the mode the provider is mounted with.
 const providerOptions = LOCAL_RUNTIME
