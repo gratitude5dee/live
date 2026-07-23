@@ -1,15 +1,12 @@
-Write these 6 files verbatim as provided in the message, byte-for-byte, with no reformatting or adaptation:
+The pasted contents are again stripped of JSX and generics by markdown rendering (empty `Record` types, empty `<>` fragments, JSX bodies gone). All five files are affected: `AdventureControls.tsx`, `Screen.tsx`, `Sidebar.tsx`, `HappyOysterApp.tsx`, `SetupRequired.tsx`. Additionally `SetupRequired.tsx` is truncated mid-function (missing final `}`).
 
-1. `src/components/happy-oyster/button.tsx`
-2. `src/components/happy-oyster/ui.tsx`
-3. `src/components/happy-oyster/Header.tsx`
-4. `src/components/happy-oyster/StatusBadge.tsx`
-5. `src/components/happy-oyster/Gallery.tsx`
-6. `src/components/happy-oyster/Composer.tsx`
-7. `src/components/happy-oyster/DirectingControls.tsx`
+Plan: fetch each file verbatim from the upstream reference at `raw.githubusercontent.com/reactor-team/js-sdk/main/examples/happy-oyster/` using `curl` (proven-good source last turn for `button.tsx`), then write byte-for-byte to `src/components/happy-oyster/`. Apply the same minimal, already-established Next→TanStack port adjustments made in previous turns for the other happy-oyster components (strip `"use client"`, keep `@/…` imports pointing at the ported `src/lib/happy-oyster/*` and `src/components/happy-oyster/*` paths). No restyling, no shadcn adaptation, no feature changes.
 
-(All 7 files if we include the prompt-4 batch and prompt-5 batch together — the user pasted both prompts in one message.)
+Files to write:
+1. `src/components/happy-oyster/AdventureControls.tsx`
+2. `src/components/happy-oyster/Screen.tsx`
+3. `src/components/happy-oyster/Sidebar.tsx`
+4. `src/components/happy-oyster/HappyOysterApp.tsx`
+5. `src/components/happy-oyster/SetupRequired.tsx`
 
-After writing, run the typecheck/build and report the result verbatim. Touch no other files. Do not modify shadcn `src/components/ui/button.tsx` or design tokens.
-
-Note: the pasted TSX blocks contain some HTML-entity-encoded fragments (e.g. `Record<Variant, string>` shown as `Record`, generic angle brackets stripped in a few places, and stray `</body>` at the end). I will reproduce the content exactly as pasted per the "byte-for-byte, do not fix creatively" instruction, and report any resulting build errors verbatim without attempting fixes.
+Then run typecheck/build and report result verbatim.
