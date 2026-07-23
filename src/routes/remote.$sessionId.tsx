@@ -5,6 +5,7 @@ import type { Preset, RemoteMessage } from "@/lib/zap/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export const Route = createFileRoute("/remote/$sessionId")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "ZAP·LIVE — Remote" },

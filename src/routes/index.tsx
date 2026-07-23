@@ -45,6 +45,7 @@ import type {
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export const Route = createFileRoute("/")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "ZAP·LIVE — realtime video editor" },

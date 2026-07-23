@@ -1,31 +1,23 @@
-## Plan: Wire up Reactor token route + /discover page
+## Root cause
+The published Cloudflare Worker throws `Disallowed operation called within global scope` while SSR-rendering the app. Something in the module-init chain of `/`, `/library`, or `/remote/$sessionId` calls a forbidden top-level operation (timer, random, fetch, WebSocket…). The build succeeds — this only shows up at runtime on Workers, so `vite dev` looks healthy while every published request 500s and falls back to the branded error page.
 
-### Files to create (byte-for-byte, as provided)
+The offending code lives deep inside browser-only dependencies (three, mediapipe, fal client, @huggingface/transformers, reactor SDK, voice-agent, WebRTC transport). The whole Zap app is a WebRTC/webcam/WebGPU experience that never renders anything useful on the server anyway.
 
-1. **`src/routes/api.reactor.token.ts`** — TanStack Start server route that mints a Reactor JWT via `POST https://api.reactor.inc/tokens`, returned as a cacheable GET with `Cache-Control: private, max-age=...`.
+## Fix (minimal, no business-logic changes)
+Disable SSR for the three routes that pull browser-only code, matching what `/discover` already does:
 
-2. **`src/routes/discover.tsx`** — `/discover` page with `ssr: false`, `React.lazy` import of `HappyOysterApp` (mandatory — a static import bundles the browser-only Reactor SDK into the Cloudflare Worker and 500s every route), loader calling `getReactorSetup()`, and `SetupRequired` fallback when no key.
+1. `src/routes/index.tsx` — add `ssr: false` to the route options.
+2. `src/routes/library.tsx` — add `ssr: false`.
+3. `src/routes/remote.$sessionId.tsx` — add `ssr: false`.
 
-### Secret
+`__root.tsx` stays server-rendered so `<head>` metadata/OG tags are still emitted at request time. `/api/reactor/token` and other server functions are unaffected.
 
-3. Add backend secret **`REACTOR_API_KEY`** via `add_secret` (user pastes value in secure form). Consumed as `process.env.REACTOR_API_KEY` by both `reactor-setup.functions.ts` and `api.reactor.token.ts`. Never exposed as `VITE_*`.
+## Verify
+- `bun run build` still succeeds.
+- Fetch `https://zaplive.lovable.app/` and confirm the HTML body is no longer the empty React error placeholder.
+- Load `/`, `/library`, `/discover` in the preview — pages render normally, no "This page didn't load" fallback.
+- Server logs no longer show the `Disallowed operation` error.
 
-### Verification
-
-4. Confirm build passes and route tree regenerates with `/discover` and `/api/reactor/token`.
-5. Manually verify:
-   - `GET /api/reactor/token` returns `{ jwt }` + correct `Cache-Control` header.
-   - `/discover` renders HappyOyster shell (badge, 6 world tiles, Compose, Return-to-world); home page unchanged.
-   - Sunny Meadow → 4-step Adventure journey → live stream with WASD + 1:00 countdown → "Travel ended" card.
-   - Coral Abyss → Directing UI with instruction input + Pause/Resume/Rewind, sent instruction appears in Story timeline.
-
-### Non-goals (do not touch)
-
-- No edits to any happy-oyster component or lib file.
-- No restyling to shadcn/design tokens.
-- Keep `ssr: false` + `React.lazy` structure exactly as specified.
-- Keep GET (not POST) for the token route.
-
-### Report
-
-Report build result verbatim; if any error, paste it as-is without creative fixes.
+## Not doing
+- Hunting the specific module doing the top-level side effect. It's inside third-party deps we can't easily patch, and the routes are client-only by design — `ssr:false` is the documented fix.
+- Any UI, styling, or feature changes.
