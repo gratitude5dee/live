@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FEATURED_WORLDS } from "@/lib/happy-oyster/worlds";
+import type { FeaturedWorld } from "@/lib/happy-oyster/worlds";
+import { FEATURED_WORLDS, modeName } from "@/lib/happy-oyster/worlds";
+import type { WorldSession } from "@/components/happy-oyster/use-world-session";
 import { HO, VIRTUAL_FIELD } from "./tokens";
 import type { WorldPlacement } from "./types";
 import { CloudCanvas } from "./CloudCanvas";
@@ -8,11 +10,13 @@ import { CreateBlob } from "./CreateBlob";
 import { BottomDock } from "./BottomDock";
 import { OnboardingOverlay } from "./OnboardingOverlay";
 import { usePanController } from "./usePanController";
+import { StatusChip } from "./StatusChip";
+import { FocusBlob } from "./FocusBlob";
+import { SessionStage } from "./SessionStage";
+import { Composer } from "./Composer";
 
 const ONBOARD_KEY = "ho-onboarded";
 
-// Deterministic placement across the virtual field. Uses a seeded PRNG so
-// positions are stable across mounts but non-uniform.
 function mulberry32(seed: number) {
   let a = seed >>> 0;
   return () => {
@@ -29,7 +33,13 @@ function buildPlacements(fieldW: number, fieldH: number): WorldPlacement[] {
   const placements: WorldPlacement[] = [];
   const worlds = FEATURED_WORLDS;
 
-  const tryPlace = (size: number, decorative: boolean, world: WorldPlacement["world"], seed: number, attempts = 60) => {
+  const tryPlace = (
+    size: number,
+    decorative: boolean,
+    world: WorldPlacement["world"],
+    seed: number,
+    attempts = 60,
+  ) => {
     for (let a = 0; a < attempts; a++) {
       const pad = size / 2 + 40;
       const x = pad + rnd() * (fieldW - pad * 2);
@@ -47,12 +57,10 @@ function buildPlacements(fieldW: number, fieldH: number): WorldPlacement[] {
     return false;
   };
 
-  // 6 primary worlds, sizes 220–400
   worlds.forEach((w, i) => {
     const size = 220 + Math.floor(rnd() * 180);
     tryPlace(size, false, w, 1000 + i * 37);
   });
-  // 5 decorative reuses at 130–200
   for (let i = 0; i < 5; i++) {
     const w = worlds[i % worlds.length];
     const size = 130 + Math.floor(rnd() * 70);
@@ -61,14 +69,34 @@ function buildPlacements(fieldW: number, fieldH: number): WorldPlacement[] {
   return placements;
 }
 
-export function FieldRoot() {
+// Derive the intent for a featured world, mirroring the current Gallery logic
+// so click behavior is byte-identical to the old flow.
+function intentFor(world: FeaturedWorld) {
+  if (world.encryptedWorldId) {
+    return {
+      kind: "attach" as const,
+      mode: modeName(world.mode),
+      encryptedWorldId: world.encryptedWorldId,
+      title: world.title,
+    };
+  }
+  return {
+    kind: "create" as const,
+    mode: modeName(world.mode),
+    params: { prompt: world.prompt },
+    title: world.title,
+  };
+}
+
+export function FieldRoot({ session }: { session: WorldSession }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState({ w: 1280, h: 800 });
   const [onboarding, setOnboarding] = useState(false);
+  const [focused, setFocused] = useState<FeaturedWorld | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
 
   useEffect(() => {
-    const measure = () =>
-      setViewport({ w: window.innerWidth, h: window.innerHeight });
+    const measure = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
     measure();
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
@@ -84,13 +112,14 @@ export function FieldRoot() {
 
   const fieldW = Math.round(viewport.w * VIRTUAL_FIELD.wMul);
   const fieldH = Math.round(viewport.h * VIRTUAL_FIELD.hMul);
-
   const placements = useMemo(() => buildPlacements(fieldW, fieldH), [fieldW, fieldH]);
-  // Fixed slot for the CREATE blob near the center
   const createSlot = useMemo(
     () => ({ x: fieldW * 0.5 + 180, y: fieldH * 0.42, size: 200, seed: 999 }),
     [fieldW, fieldH],
   );
+
+  const overlayOpen =
+    onboarding || !!focused || composerOpen || session.view.kind !== "browse";
 
   const pos = usePanController({
     viewportRef: rootRef,
@@ -98,6 +127,8 @@ export function FieldRoot() {
     fieldH,
     viewW: viewport.w,
     viewH: viewport.h,
+    edgeThreshold: overlayOpen ? 0 : 120,
+    maxSpeed: overlayOpen ? 0 : 14,
   });
 
   const closeOnboarding = () => {
@@ -109,6 +140,9 @@ export function FieldRoot() {
     }
   };
 
+  const isBrowse = session.view.kind === "browse";
+  const showChrome = isBrowse && !onboarding && !focused && !composerOpen;
+
   return (
     <div
       ref={rootRef}
@@ -119,11 +153,9 @@ export function FieldRoot() {
         background: HO.paper,
         touchAction: "none",
         overscrollBehavior: "contain",
-        cursor: "grab",
       }}
       tabIndex={0}
     >
-      {/* Cloud plane — parallax 0.85 */}
       <div
         style={{
           position: "absolute",
@@ -136,7 +168,6 @@ export function FieldRoot() {
         <CloudCanvas width={fieldW} height={fieldH} pixelSize={4} />
       </div>
 
-      {/* Blob plane — full pan */}
       <div
         style={{
           position: "absolute",
@@ -155,8 +186,8 @@ export function FieldRoot() {
             size={p.size}
             seed={p.seed}
             decorative={p.decorative}
-            onActivate={() => {
-              /* engine wiring lands in a later prompt */
+            onActivate={(world) => {
+              if (isBrowse) setFocused(world);
             }}
           />
         ))}
@@ -166,28 +197,49 @@ export function FieldRoot() {
           size={createSlot.size}
           seed={createSlot.seed}
           onClick={() => {
-            /* opens composer once available */
+            if (isBrowse) setComposerOpen(true);
           }}
         />
       </div>
 
-      <BottomDock
-        onCreate={() => {
-          /* opens composer once available */
-        }}
-        onHelp={() => setOnboarding(true)}
-        onToggleSound={() => {
-          /* placeholder */
-        }}
-        muted
+      {showChrome ? (
+        <>
+          <StatusChip onDisconnect={session.exit} />
+          <BottomDock
+            onCreate={() => setComposerOpen(true)}
+            onHelp={() => setOnboarding(true)}
+            onToggleSound={() => {
+              /* placeholder */
+            }}
+            muted
+          />
+        </>
+      ) : null}
+
+      {focused && isBrowse ? (
+        <FocusBlob
+          world={focused}
+          onEnter={() => {
+            const w = focused;
+            setFocused(null);
+            session.run(intentFor(w));
+          }}
+          onClose={() => setFocused(null)}
+        />
+      ) : null}
+
+      <SessionStage session={session} />
+
+      <Composer
+        open={composerOpen && isBrowse}
+        onClose={() => setComposerOpen(false)}
+        onIntent={(i) => session.run(i)}
       />
 
       <OnboardingOverlay
         open={onboarding}
         onClose={closeOnboarding}
-        onCreate={() => {
-          /* composer later */
-        }}
+        onCreate={() => setComposerOpen(true)}
       />
     </div>
   );

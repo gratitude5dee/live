@@ -87,6 +87,7 @@ export function OnboardingOverlay({ open, onClose, onCreate }: Props) {
             fontSize: 18,
             cursor: "pointer",
             opacity: 0.7,
+            zIndex: 3,
           }}
         >
           ×

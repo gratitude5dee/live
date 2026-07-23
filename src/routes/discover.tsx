@@ -11,9 +11,9 @@ import { getReactorSetup } from "@/lib/happy-oyster/reactor-setup.functions";
 // would drag the ~1.7MB Reactor SDK into the Cloudflare Worker bundle, where
 // its browser-globals module-init crashes every request (500 across the
 // site). React.lazy defers the import until the browser mounts the route.
-const FieldRoot = lazy(() =>
-  import("@/components/happy-oyster/field/FieldRoot").then((m) => ({
-    default: m.FieldRoot,
+const FieldApp = lazy(() =>
+  import("@/components/happy-oyster/field/FieldApp").then((m) => ({
+    default: m.FieldApp,
   })),
 );
 
@@ -42,7 +42,7 @@ function DiscoverPage() {
     <div className="ho-scope min-h-screen bg-black text-white">
       {showApp ? (
         <Suspense fallback={<div className="p-8">Loading…</div>}>
-          <FieldRoot />
+          <FieldApp />
         </Suspense>
       ) : (
         <SetupRequired />
