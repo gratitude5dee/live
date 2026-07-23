@@ -11,7 +11,7 @@
 // client-side and the world stays ready for another run.
 
 import { useEffect, useRef, useState } from "react";
-import { TRAVEL_SECONDS } from "@/lib/worlds";
+import { TRAVEL_SECONDS } from "@/lib/happy-oyster/worlds";
 import { Button } from "@/components/ui/button";
 import type { WorldSession } from "./use-world-session";
 import { StatusBadge } from "./StatusBadge";

@@ -1,4 +1,4 @@
-import { Header } from "@/components/Header";
+import { Header } from "./Header";
 
 const ACCOUNT_API_KEYS_URL = "https://www.reactor.inc/account/api-keys";
 
