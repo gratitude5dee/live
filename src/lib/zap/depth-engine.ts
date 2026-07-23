@@ -106,7 +106,13 @@ export class DepthEngine {
   async init(onProgress?: (p: DepthProgress) => void) {
     if (this.pipeline) return;
     if (!DepthEngine.webgpuAvailable()) throw new WebGPUUnsupportedError();
-    const mod = await import("@huggingface/transformers");
+    // Load transformers.js from a CDN via a variable specifier so Rollup
+    // does NOT bundle it. Bundling pulls ONNX Runtime Web's module-init into
+    // the Cloudflare Worker SSR graph, which violates the Worker's
+    // global-scope restrictions and 500s every route. This is a browser-only
+    // code path (guarded by webgpuAvailable), so a CDN import is safe.
+    const modUrl = "https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.2.0/dist/transformers.min.js";
+    const mod = await import(/* @vite-ignore */ modUrl);
     this.RawImageCtor = mod.RawImage as unknown as typeof this.RawImageCtor;
     const pl = await mod.pipeline(
       "depth-estimation",
