@@ -1,4 +1,3 @@
-
 // The sidebar's ways in while browsing:
 //   • a custom prompt — compose your own world, choose Adventure or Directing;
 //   • an existing world id — attach a world you built earlier (instant).
@@ -7,7 +6,7 @@
 import { useState } from "react";
 import { MAX_FIRST_FRAME_IMAGE_BYTES } from "@reactor-models/happy-oyster";
 import type { WorldIntent } from "@/lib/happy-oyster/worlds";
-import { Button } from "@/components/ui/button";
+import { Button } from "./button";
 import { SectionLabel } from "./ui";
 
 export function CustomCompose({
