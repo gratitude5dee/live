@@ -1,4 +1,4 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Preset, RemoteMessage } from "@/lib/zap/types";
@@ -8,10 +8,12 @@ export const Route = createLazyFileRoute("/remote/$sessionId")({
   component: RemotePage,
 });
 
+const routeApi = getRouteApi("/remote/$sessionId");
+
 type Ticker = { id: number; label: string; at: number };
 
 function RemotePage() {
-  const { sessionId } = Route.useParams();
+  const { sessionId } = routeApi.useParams();
   const [ready, setReady] = useState(false);
   const [presets, setPresets] = useState<Preset[]>([]);
   const [prompt, setPrompt] = useState("");
