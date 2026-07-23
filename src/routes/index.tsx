@@ -16,7 +16,11 @@ import {
 import { describeRegion } from "@/lib/zap/describe-region";
 import { fillWhere } from "@/lib/zap/prompt-templates";
 import { CompositeStream } from "@/lib/zap/composite-stream";
-import { DepthEngine, WebGPUUnsupportedError } from "@/lib/zap/depth-engine";
+// Type-only import — the runtime module (which transitively loads
+// @huggingface/transformers + onnxruntime-web) is dynamically imported inside
+// toggleDepth() so it never lands in the SSR module graph. ONNX runtime's
+// module-init calls violate Cloudflare Workers' global-scope restrictions.
+import type { DepthEngine as DepthEngineType } from "@/lib/zap/depth-engine";
 import { loadGestureRecognizer, loadFaceLandmarker, takeWarmedVision } from "@/lib/zap/mediapipe";
 import { haptic } from "@/lib/zap/haptics";
 import { play as playSfx } from "@/lib/sfx";
