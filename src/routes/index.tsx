@@ -175,12 +175,14 @@ function StagePage() {
   const [depthOn, setDepthOn] = useState(false);
   const [depthLoading, setDepthLoading] = useState(false);
   const [depthProgress, setDepthProgress] = useState(0);
-  const [depthAvailable, setDepthAvailable] = useState(() => DepthEngine.webgpuAvailable());
+  const [depthAvailable, setDepthAvailable] = useState(
+    () => typeof navigator !== "undefined" && "gpu" in navigator,
+  );
   // Presence of navigator.gpu ≠ working adapter. Confirm before enabling
   // the toggle so iOS Safari (which now exposes navigator.gpu on some
   // builds) doesn't advertise a broken button.
   useEffect(() => {
-    if (!DepthEngine.webgpuAvailable()) {
+    if (typeof navigator === "undefined" || !("gpu" in navigator)) {
       setDepthAvailable(false);
       return;
     }
@@ -198,7 +200,7 @@ function StagePage() {
   }, []);
   const [depthStream, setDepthStream] = useState<MediaStream | null>(null);
   const depthOnRef = useRef(false);
-  const depthEngineRef = useRef<DepthEngine | null>(null);
+  const depthEngineRef = useRef<DepthEngineType | null>(null);
 
   // Which stream is currently attached to Lucy's outbound WebRTC sender.
   // Surfaced in the camera PiP so users can confirm the pipeline at a glance.
