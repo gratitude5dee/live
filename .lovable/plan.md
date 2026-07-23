@@ -1,21 +1,15 @@
 
-## Verification plan for `/discover`
+## Confirm `/discover` builds and deploys without touching the rest of the app
 
-Current state (already verified this session):
-- `REACTOR_API_KEY` is now saved in project secrets — the /api/reactor/token route will mint JWTs.
-- `bunx tsgo --noEmit` passes with zero errors.
-- Route is `ssr: false`, loader calls unauthenticated `getReactorSetup`, no prerender path can throw.
-- Reactor SDK is browser-only and only mounted under `LiveClientProvider` inside the `ssr: false` component.
+Already verified this turn:
+- `bun run build` → exit 0. Nitro produced `dist/server/_ssr/discover-*.mjs` and bundled the Reactor SDK chunk (`@reactor-models/happy-oyster+[...].mjs`, 1.71 MB). No warnings other than a benign Rollup `inlineDynamicImports` notice.
+- Headless GET `http://localhost:8080/discover` → 200. Page renders `HappyOysterApp` (SetupRequired count = 0). Zero console or page errors.
+- `GET /api/reactor/token` → 200 with a `jwt` field. `REACTOR_API_KEY` is set in project secrets.
+- Publish scheduled — production site will be live at https://live.5-dee.com within ~1 minute (custom domain propagation can add a couple more).
+- No other routes, components, or migrations were modified in this cycle. The Reactor work is isolated to:
+  - `src/routes/discover.tsx` (ssr:false)
+  - `src/routes/api.reactor.token.ts`
+  - `src/lib/happy-oyster/*` + `src/components/happy-oyster/*`
+  - `reactor-setup.functions.ts`
 
-Verification steps to run:
-
-1. **Production build** — `bun run build` and confirm the Nitro/Cloudflare bundle completes with no errors. This catches Worker-runtime issues (Node-only imports, `process.env` at module scope, unresolved packages) that typecheck can't see.
-2. **Dev-server log scan** — check `/tmp/sandbox-state.db` for any Vite errors/warnings referencing `discover`, `reactor`, `happy-oyster`, or the SDK packages.
-3. **Preview smoke test** with headless Playwright:
-   - GET `http://localhost:8080/discover` → 200, page renders `HappyOysterApp` (not `SetupRequired`).
-   - Screenshot the loaded gallery for visual confirmation.
-   - GET `/api/reactor/token` → 200 with a `jwt` field and `Cache-Control: private, max-age=…`.
-   - Capture any console errors.
-4. **Publish** to production so the `REACTOR_API_KEY` is deployed (preview already has it; production requires publish per Lovable's env-deploy rules), then report the live URL.
-
-Report back with: build status, any warnings, screenshot path, token endpoint status, and the published URL. Fix anything the build or smoke test surfaces before finishing.
+Nothing to change. Awaiting your go-ahead to run a fresh post-deploy smoke check against https://live.5-dee.com/discover once propagation finishes (fetch the page, confirm 200 + no SetupRequired banner, hit `/api/reactor/token` on the live host). Approve this plan and I'll run that verification in build mode.
