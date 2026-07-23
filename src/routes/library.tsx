@@ -9,6 +9,7 @@ import LiquidEther from "@/components/reactbits/LiquidEther";
 import wzrdLogo from "@/assets/wzrd-logo.png.asset.json";
 
 export const Route = createFileRoute("/library")({
+  ssr: false,
   head: () => ({
     meta: [
       { title: "ZAP·LIVE — Archive" },
