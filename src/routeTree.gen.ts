@@ -10,12 +10,19 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LibraryRouteImport } from './routes/library'
+import { Route as DiscoverRouteImport } from './routes/discover'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RemoteSessionIdRouteImport } from './routes/remote.$sessionId'
+import { Route as ApiReactorTokenRouteImport } from './routes/api.reactor.token'
 
 const LibraryRoute = LibraryRouteImport.update({
   id: '/library',
   path: '/library',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DiscoverRoute = DiscoverRouteImport.update({
+  id: '/discover',
+  path: '/discover',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -28,35 +35,64 @@ const RemoteSessionIdRoute = RemoteSessionIdRouteImport.update({
   path: '/remote/$sessionId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiReactorTokenRoute = ApiReactorTokenRouteImport.update({
+  id: '/api/reactor/token',
+  path: '/api/reactor/token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/discover': typeof DiscoverRoute
   '/library': typeof LibraryRoute
   '/remote/$sessionId': typeof RemoteSessionIdRoute
+  '/api/reactor/token': typeof ApiReactorTokenRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/discover': typeof DiscoverRoute
   '/library': typeof LibraryRoute
   '/remote/$sessionId': typeof RemoteSessionIdRoute
+  '/api/reactor/token': typeof ApiReactorTokenRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/discover': typeof DiscoverRoute
   '/library': typeof LibraryRoute
   '/remote/$sessionId': typeof RemoteSessionIdRoute
+  '/api/reactor/token': typeof ApiReactorTokenRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/library' | '/remote/$sessionId'
+  fullPaths:
+    | '/'
+    | '/discover'
+    | '/library'
+    | '/remote/$sessionId'
+    | '/api/reactor/token'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/library' | '/remote/$sessionId'
-  id: '__root__' | '/' | '/library' | '/remote/$sessionId'
+  to:
+    | '/'
+    | '/discover'
+    | '/library'
+    | '/remote/$sessionId'
+    | '/api/reactor/token'
+  id:
+    | '__root__'
+    | '/'
+    | '/discover'
+    | '/library'
+    | '/remote/$sessionId'
+    | '/api/reactor/token'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DiscoverRoute: typeof DiscoverRoute
   LibraryRoute: typeof LibraryRoute
   RemoteSessionIdRoute: typeof RemoteSessionIdRoute
+  ApiReactorTokenRoute: typeof ApiReactorTokenRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -66,6 +102,13 @@ declare module '@tanstack/react-router' {
       path: '/library'
       fullPath: '/library'
       preLoaderRoute: typeof LibraryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/discover': {
+      id: '/discover'
+      path: '/discover'
+      fullPath: '/discover'
+      preLoaderRoute: typeof DiscoverRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -82,24 +125,23 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RemoteSessionIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/reactor/token': {
+      id: '/api/reactor/token'
+      path: '/api/reactor/token'
+      fullPath: '/api/reactor/token'
+      preLoaderRoute: typeof ApiReactorTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DiscoverRoute: DiscoverRoute,
   LibraryRoute: LibraryRoute,
   RemoteSessionIdRoute: RemoteSessionIdRoute,
+  ApiReactorTokenRoute: ApiReactorTokenRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}

@@ -1,6 +1,10 @@
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
+/* HappyOyster (/discover): Reactor UI base (--reactor-* vars, fonts) + the
+   page-scoped .ho-scope theme. Both are namespaced — no effect elsewhere. */
+@import "@reactor-team/ui/styles.css";
+@import "./styles/happy-oyster.css";
 
 @custom-variant dark (&:is(.dark *));
 
