@@ -5,14 +5,6 @@ import type { Preset, RemoteMessage } from "@/lib/zap/types";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export const Route = createLazyFileRoute("/remote/$sessionId")({
-  ssr: false,
-  head: () => ({
-    meta: [
-      { title: "ZAP·LIVE — Remote" },
-      { name: "description", content: "Phone remote for a ZAP·LIVE stage." },
-      { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1" },
-    ],
-  }),
   component: RemotePage,
 });
 

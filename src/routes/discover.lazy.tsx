@@ -1,7 +1,6 @@
-import { createLazyFileRoute } from "@tanstack/react-router";
+import { createLazyFileRoute, getRouteApi } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 import { SetupRequired } from "@/components/happy-oyster/SetupRequired";
-import { getReactorSetup } from "@/lib/happy-oyster/reactor-setup.functions";
 
 // /discover — the full HappyOyster app, hosted as a page of this project.
 //
@@ -17,24 +16,14 @@ const FieldApp = lazy(() =>
   })),
 );
 
+const routeApi = getRouteApi("/discover");
+
 export const Route = createLazyFileRoute("/discover")({
-  ssr: false,
-  loader: () => getReactorSetup(),
-  head: () => ({
-    meta: [
-      { title: "HappyOyster — Discover" },
-      {
-        name: "description",
-        content:
-          "Build a world from a prompt, then travel it live, WASD in Adventure, text in Directing.",
-      },
-    ],
-  }),
   component: DiscoverPage,
 });
 
 function DiscoverPage() {
-  const { hasKey } = Route.useLoaderData();
+  const { hasKey } = routeApi.useLoaderData();
   const localRuntime = import.meta.env.VITE_HO_LOCAL_RUNTIME === "1";
   const showApp = localRuntime || hasKey;
 

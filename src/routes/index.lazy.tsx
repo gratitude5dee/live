@@ -45,23 +45,6 @@ import type {
 import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export const Route = createLazyFileRoute("/")({
-  ssr: false,
-  head: () => ({
-    meta: [
-      { title: "ZAP·LIVE — realtime video editor" },
-      {
-        name: "description",
-        content:
-          "Your webcam is the timeline. Edit the live feed with prompts, gestures, and reference images — Zap LIve repaints every frame in under a second.",
-      },
-      { property: "og:title", content: "ZAP·LIVE — realtime video editor" },
-      {
-        property: "og:description",
-        content:
-          "Your webcam is the timeline. Edit the live feed with prompts, gestures, and reference images — Zap LIve repaints every frame in under a second.",
-      },
-    ],
-  }),
   component: StagePage,
 });
 
