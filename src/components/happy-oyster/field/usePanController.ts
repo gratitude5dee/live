@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 // RAF-driven pan for the field. Supports edge-hover (desktop), one-finger drag
 // (touch/pointer), and arrow keys. Rubber-bands at the virtual-field edges.
 export function usePanController(opts: {
-  viewportRef: React.RefObject<HTMLElement>;
+  viewportRef: React.RefObject<HTMLElement | null>;
   fieldW: number;
   fieldH: number;
   viewW: number;
