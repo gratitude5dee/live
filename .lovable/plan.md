@@ -1,33 +1,47 @@
-## Root cause
+# Global Takes on /library
 
-Every route on the deployed site returns 500 with:
+Add a public "Global" scope to the Archive page so anyone (including anon sign-ins) can browse every clip ever recorded, alongside their own "Yours" takes.
 
+## UX
+
+Add a scope toggle in the sticky control bar, right next to the existing All/Video/Snapshot filter:
+
+```text
+[ Yours · Global ]   All  Video  Snapshot          [ Feed | Grid | List ]
 ```
-Error: Disallowed operation called within global scope.
-```
 
-Cloudflare Workers forbid I/O, timers, and `crypto.getRandomValues()` during module init. The culprit is `@huggingface/transformers` (used by `src/lib/zap/depth-engine.ts` for the Depth toggle). Its bundled ONNX Runtime Web runs `Ve()` / `wasmBackend` initialization at module top-level, which trips the Worker global-scope check.
+- Default: **Yours** (current behavior — user's own takes).
+- **Global**: fetches the latest 120 takes across all users, newest first.
+- Kind filter (All/Video/Snapshot) and view mode (Feed/Grid/List) apply to both scopes.
+- In Global scope:
+  - Selection checkboxes, bulk delete, and per-item delete are hidden (read-only).
+  - Bulk download / ZIP still work.
+  - Hero copy switches: title becomes "Everyone's *takes.*", subtitle "A public reel of every session Zap has ever repainted."
+  - Each card gets a small anonymized author chip (e.g. `USR·a1b2` — first 4 chars of user_id) so the feed feels populated, no PII.
+- Scope choice is persisted in `localStorage` (`zap.library.scope`).
 
-Even though `depth-engine.ts` uses `await import("@huggingface/transformers")` inside a function, `src/routes/index.tsx` still statically imports `DepthEngine`, so Vite/Rollup pulls the transformers module into the SSR bundle. Confirmed in the build output: `dist/server/_libs/@huggingface/transformers+[...].mjs` is statically imported by `routes-M7P16K1C.mjs`, `LiquidEther-CFCQ33NI.mjs`, and `sfx-4yT4TVlX.mjs` (Rollup collocated the unenv `performance` polyfill into the same chunk). Once that chunk loads at worker cold-start, ONNX's module-init runs and the Worker rejects it → 500 on `/`, `/discover`, `/favicon.ico`, everything.
+## Backend (one migration)
 
-The `React.lazy` on HappyOysterApp from the previous turn was correct but not sufficient — transformers is a separate offender.
+Currently `takes` RLS and the private `takes` storage bucket only allow the owner to read. To expose a public feed we add read-only public access:
 
-## Fix
+1. `public.takes` — add a policy allowing anyone (anon + authenticated) to `SELECT` all rows. Keep existing owner-only `ALL` policy for insert/update/delete.
+2. Storage `takes` bucket — add a policy on `storage.objects` allowing public `SELECT` for objects in the `takes` bucket, so `createSignedUrl` (and public URLs) resolve for other users' files. Bucket stays private on the write side (owner-only insert via existing scoped policy).
 
-Keep `depth-engine.ts` (and its transitive transformers bundle) out of every SSR-reachable module graph.
+No schema changes, no new tables.
 
-1. In `src/routes/index.tsx`:
-   - Remove `import { DepthEngine, WebGPUUnsupportedError } from "@/lib/zap/depth-engine"`.
-   - Load the module dynamically only in the browser, e.g. inside a `useEffect` / handler:
-     ```ts
-     const { DepthEngine, WebGPUUnsupportedError } = await import("@/lib/zap/depth-engine");
-     ```
-   - The `depthAvailable` initial state currently calls `DepthEngine.webgpuAvailable()` in a `useState` initializer — replace with a lightweight inline check (`typeof navigator !== "undefined" && "gpu" in navigator`) and refine after the dynamic import resolves. Keep the ref typed as `unknown` / `any` or import the class as a `type` only (`import type { DepthEngine } from "..."` — type-only imports are erased and don't reach Rollup's SSR graph).
-2. Verify the fix with `bun run build` and confirm:
-   - `dist/server/_libs/@huggingface/` no longer exists (or is only referenced from client-side async chunks under `dist/client/`).
-   - `dist/server/_ssr/*.mjs` no longer statically imports `transformers+[...].mjs`.
-3. Publish and hit `https://live.5-dee.com/` — expect 200 with the landing page HTML.
+## Frontend changes (src/routes/library.tsx only)
+
+- New `Scope = "mine" | "global"` state + persistence.
+- `useEffect` loader keys on `scope`:
+  - `mine`: unchanged query.
+  - `global`: `.from("takes").select("*").order("created_at",{ascending:false}).limit(120)` (no user filter — RLS allows all).
+- Hide selection UI, delete buttons, and CommandBar delete action when `scope === "global"`.
+- Add anonymized author badge derived from `user_id.slice(0,4)`.
+- Hero title/subtitle swap based on scope.
+- Add `ScopeSegmented` control in `ControlBar` (mirrors `ViewSegmented` styling).
 
 ## Out of scope
 
-No behavior changes to the Depth feature itself — the runtime path is the same, only the import boundary moves. UI, presets, streaming, and voice are unchanged.
+- No profiles, usernames, avatars, likes, reports, or moderation tooling.
+- No pagination beyond the existing 120-row cap (matches current behavior).
+- No realtime subscription — page load fetch only.

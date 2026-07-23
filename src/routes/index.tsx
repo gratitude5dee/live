@@ -16,11 +16,7 @@ import {
 import { describeRegion } from "@/lib/zap/describe-region";
 import { fillWhere } from "@/lib/zap/prompt-templates";
 import { CompositeStream } from "@/lib/zap/composite-stream";
-// Type-only import — the runtime module (which transitively loads
-// @huggingface/transformers + onnxruntime-web) is dynamically imported inside
-// toggleDepth() so it never lands in the SSR module graph. ONNX runtime's
-// module-init calls violate Cloudflare Workers' global-scope restrictions.
-import type { DepthEngine as DepthEngineType } from "@/lib/zap/depth-engine";
+import { DepthEngine, WebGPUUnsupportedError } from "@/lib/zap/depth-engine";
 import { loadGestureRecognizer, loadFaceLandmarker, takeWarmedVision } from "@/lib/zap/mediapipe";
 import { haptic } from "@/lib/zap/haptics";
 import { play as playSfx } from "@/lib/sfx";
@@ -175,14 +171,12 @@ function StagePage() {
   const [depthOn, setDepthOn] = useState(false);
   const [depthLoading, setDepthLoading] = useState(false);
   const [depthProgress, setDepthProgress] = useState(0);
-  const [depthAvailable, setDepthAvailable] = useState(
-    () => typeof navigator !== "undefined" && "gpu" in navigator,
-  );
+  const [depthAvailable, setDepthAvailable] = useState(() => DepthEngine.webgpuAvailable());
   // Presence of navigator.gpu ≠ working adapter. Confirm before enabling
   // the toggle so iOS Safari (which now exposes navigator.gpu on some
   // builds) doesn't advertise a broken button.
   useEffect(() => {
-    if (typeof navigator === "undefined" || !("gpu" in navigator)) {
+    if (!DepthEngine.webgpuAvailable()) {
       setDepthAvailable(false);
       return;
     }
@@ -200,7 +194,7 @@ function StagePage() {
   }, []);
   const [depthStream, setDepthStream] = useState<MediaStream | null>(null);
   const depthOnRef = useRef(false);
-  const depthEngineRef = useRef<DepthEngineType | null>(null);
+  const depthEngineRef = useRef<DepthEngine | null>(null);
 
   // Which stream is currently attached to Lucy's outbound WebRTC sender.
   // Surfaced in the camera PiP so users can confirm the pipeline at a glance.
@@ -317,9 +311,8 @@ function StagePage() {
     try {
       setDepthLoading(true);
       setDepthProgress(0);
-      const { DepthEngine } = await import("@/lib/zap/depth-engine");
       const engine = new DepthEngine();
-      await engine.init((p: { progress?: number }) => {
+      await engine.init((p) => {
         if (typeof p.progress === "number") setDepthProgress(Math.round(p.progress));
       });
       const src = inputVideoRef.current;
@@ -341,7 +334,7 @@ function StagePage() {
       playSfx("bloom");
 
     } catch (err) {
-      if ((err as Error | null)?.name === "WebGPUUnsupportedError") {
+      if (err instanceof WebGPUUnsupportedError) {
         toast.error("WebGPU not available");
       } else {
         toast.error("Depth model failed to load");
