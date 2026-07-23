@@ -317,8 +317,9 @@ function StagePage() {
     try {
       setDepthLoading(true);
       setDepthProgress(0);
+      const { DepthEngine } = await import("@/lib/zap/depth-engine");
       const engine = new DepthEngine();
-      await engine.init((p) => {
+      await engine.init((p: { progress?: number }) => {
         if (typeof p.progress === "number") setDepthProgress(Math.round(p.progress));
       });
       const src = inputVideoRef.current;
@@ -340,7 +341,7 @@ function StagePage() {
       playSfx("bloom");
 
     } catch (err) {
-      if (err instanceof WebGPUUnsupportedError) {
+      if ((err as Error | null)?.name === "WebGPUUnsupportedError") {
         toast.error("WebGPU not available");
       } else {
         toast.error("Depth model failed to load");
