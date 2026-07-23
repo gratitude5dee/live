@@ -15,8 +15,8 @@
 
 import { useCallback, useState } from "react";
 import type { HappyOysterMode } from "@reactor-models/happy-oyster";
-import type { WorldIntent } from "@/lib/worlds";
-import { Header } from "@/components/Header";
+import type { WorldIntent } from "@/lib/happy-oyster/worlds";
+import { Header } from "./Header";
 import { LiveClientProvider } from "@/components/happy-oyster/ho-client";
 import { useWorldSession } from "@/components/happy-oyster/use-world-session";
 import { Sidebar } from "@/components/happy-oyster/Sidebar";

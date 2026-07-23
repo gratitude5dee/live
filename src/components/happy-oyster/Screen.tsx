@@ -6,7 +6,7 @@
 // plays on top.
 
 import type { ReactNode } from "react";
-import type { JourneyStep } from "@/lib/view";
+import type { JourneyStep } from "@/lib/happy-oyster/view";
 import { useVideoSlot } from "./ho-client";
 import type { WorldSession } from "./use-world-session";
 import { Eyebrow, Spinner, WorldIdChip } from "./ui";
