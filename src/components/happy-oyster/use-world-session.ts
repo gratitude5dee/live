@@ -1,4 +1,3 @@
-
 // The session driver behind the fixed layout. It owns the user's pending
 // intent, walks the model through connect → create (or attach) → auto-travel,
 // and reduces every render's SDK snapshot to the single AppView the layout
