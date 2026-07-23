@@ -1,4 +1,3 @@
-
 // Directing (mode 2) control deck: steer the story with free-text instructions
 // plus pause / resume / rewind transport, over the live instruction timeline
 // the runtime reconciles into travel_state. Rewind needs the session paused and
