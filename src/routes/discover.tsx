@@ -1,17 +1,21 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { HappyOysterApp } from "@/components/happy-oyster/HappyOysterApp";
+import { lazy, Suspense } from "react";
 import { SetupRequired } from "@/components/happy-oyster/SetupRequired";
 import { getReactorSetup } from "@/lib/happy-oyster/reactor-setup.functions";
 
-// /discover — the full HappyOyster app (happy-oyster repo), hosted as a page
-// of this project. The gate mirrors happy-oyster's app/page.tsx:
-//   - VITE_HO_LOCAL_RUNTIME=1 → the live app against a local runtime (no key)
-//   - REACTOR_API_KEY set     → the live app, which mints JWTs server-side
-//   - none                    → the <SetupRequired /> landing
+// /discover — the full HappyOyster app, hosted as a page of this project.
 //
-// ssr: false — the Reactor SDK is WebRTC/browser-only, so this route renders
-// entirely on the client (the Next.js original used `force-dynamic` + client
-// components for the same reason).
+// ssr: false — the Reactor SDK is WebRTC/browser-only. But ssr:false only
+// skips *rendering* on the server; TanStack Start still loads this route's
+// module server-side to answer the loader. A static import of HappyOysterApp
+// would drag the ~1.7MB Reactor SDK into the Cloudflare Worker bundle, where
+// its browser-globals module-init crashes every request (500 across the
+// site). React.lazy defers the import until the browser mounts the route.
+const HappyOysterApp = lazy(() =>
+  import("@/components/happy-oyster/HappyOysterApp").then((m) => ({
+    default: m.HappyOysterApp,
+  })),
+);
 
 export const Route = createFileRoute("/discover")({
   ssr: false,
@@ -34,12 +38,15 @@ function DiscoverPage() {
   const localRuntime = import.meta.env.VITE_HO_LOCAL_RUNTIME === "1";
   const showApp = localRuntime || hasKey;
 
-  // .ho-scope + dark scope HappyOyster's theme tokens (Reactor gold primary,
-  // 4px radius, Reactor fonts, dark scrollbars) to this page only — the rest
-  // of the app keeps its own design system. See src/styles/happy-oyster.css.
   return (
     <div className="ho-scope dark font-sans antialiased">
-      {showApp ? <HappyOysterApp /> : <SetupRequired />}
+      {showApp ? (
+        <Suspense fallback={<div className="min-h-dvh bg-zinc-950" />}>
+          <HappyOysterApp />
+        </Suspense>
+      ) : (
+        <SetupRequired />
+      )}
     </div>
   );
 }
