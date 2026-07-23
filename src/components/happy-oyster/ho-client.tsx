@@ -91,8 +91,8 @@ export function useVideoSlot(): ReactNode {
 // (adventure on :8080, directing on :8081), skipping the Coordinator: connect()
 // takes no JWT and there is no /tokens exchange. `local` lets the SDK pick the
 // right per-mode port; an explicit NEXT_PUBLIC_COORDINATOR_URL always wins.
-const LOCAL_RUNTIME = process.env.NEXT_PUBLIC_HO_LOCAL_RUNTIME === "1";
-const COORDINATOR_URL = process.env.NEXT_PUBLIC_COORDINATOR_URL;
+const LOCAL_RUNTIME = import.meta.env.VITE_HO_LOCAL_RUNTIME === "1";
+const COORDINATOR_URL = import.meta.env.VITE_COORDINATOR_URL as string | undefined;
 
 // The Reactor connection options, minus the mode the provider is mounted with.
 const providerOptions = LOCAL_RUNTIME
