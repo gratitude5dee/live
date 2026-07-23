@@ -1,48 +1,27 @@
 ## Confirmed diagnosis
 
-**Do I know what the issue is? Yes.** The route files are now correctly lazy, but the production bundler is still merging React—the runtime required by every server request—into the same generated vendor chunk as Reactor and Hugging Face Transformers.
+The screenshot matches the deployed server fallback, and fresh production logs still show `Disallowed operation called within global scope`.
 
-The built server entry proves the startup path:
+The generated server bundle contains the browser Supabase client through the global auth-attacher middleware. During server rendering, that client is created with session persistence and automatic token refresh enabled. Supabase Auth starts a background refresh timer; when it runs outside an active request, the hosting runtime rejects it and returns the site-wide 500.
 
-```text
-server entry
-  → generated server handler
-  → generated router
-  → React runtime
-  → @reactor-models/happy-oyster vendor chunk
-  → @huggingface/transformers vendor chunk
-```
+## Fix plan
 
-That vendor chunk is evaluated before request handling begins. Its browser-oriented dependencies perform initialization that the deployed Worker forbids at global scope, producing `Disallowed operation called within global scope` before any route can render. This explains why `ssr: false`, `.lazy.tsx`, and React.lazy improved route isolation but did not fix the deployed link.
+1. **Make the auth attacher server-safe**
+   - Guard its client middleware so server-rendered server-function calls do not instantiate the browser Supabase client or read a browser session.
+   - Preserve the current browser behavior so authenticated client calls still receive their bearer token.
 
-## Implementation plan
+2. **Remove background initialization from server-side Supabase clients**
+   - Ensure every Supabase client that can exist in the server runtime disables persistence, automatic refresh, and constructor-time background initialization.
+   - Keep authentication checks request-scoped and explicitly awaited.
 
-1. **Create explicit production chunk boundaries**
-   - Update `vite.config.ts` so React, React DOM, and Scheduler are emitted in an SSR-safe runtime chunk.
-   - Keep Reactor, Happy Oyster, Hugging Face Transformers, MediaPipe, fal, Three.js, and cuelume in browser-only chunks.
-   - Preserve the existing TanStack Start server entry and error wrapper.
+3. **Remove the ineffective chunk workaround**
+   - Delete the `manualChunks` rules that merge all browser libraries into one chunk; they do not address the confirmed timer source and may create fragile bundle coupling.
+   - Preserve the custom TanStack server entry and existing error capture.
 
-2. **Verify the generated server startup graph**
-   - Build the production artifact.
-   - Confirm the main server entry and generated router can import React without evaluating Reactor, Transformers, MediaPipe, Three.js, fal, or cuelume.
-   - Check that those dependencies remain behind lazy route/client imports.
+4. **Verify the production artifact and routes**
+   - Confirm the built server path cannot start the Supabase refresh timer.
+   - Test `/`, `/discover`, `/library`, `/remote/test`, and `/favicon.ico` using the production server path.
 
-3. **Validate routes using the production server artifact**
-   - Test `/`, `/discover`, `/library`, `/remote/test`, and `/favicon.ico`.
-   - Confirm page requests no longer return the generic 500 fallback and that existing client-side experiences still load.
-
-4. **Publish and verify the actual Worker**
-   - Run the required security check.
-   - Publish the corrected build.
-   - Re-test the published and custom-domain URLs and inspect fresh server logs for absence of `Disallowed operation called within global scope`.
-
-5. **Fallback only if the artifact still co-locates dependencies**
-   - Replace the affected Happy Oyster runtime imports with browser-only dynamic imports at the narrowest call sites, while preserving the current engine and presentation behavior.
-
-<presentation-actions>
-  <presentation-open-history>View History</presentation-open-history>
-</presentation-actions>
-
-<presentation-actions>
-<presentation-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</presentation-link>
-</presentation-actions>
+5. **Publish and verify the live site**
+   - Run the required security check, publish the corrected build, then re-test the Lovable URL and custom domain.
+   - Confirm fresh production logs no longer contain `Disallowed operation called within global scope`.
