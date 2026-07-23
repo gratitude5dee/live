@@ -42,7 +42,7 @@ function DiscoverPage() {
     <div className="ho-scope min-h-screen bg-black text-white">
       {showApp ? (
         <Suspense fallback={<div className="p-8">Loading…</div>}>
-          <HappyOysterApp />
+          <FieldRoot />
         </Suspense>
       ) : (
         <SetupRequired />
