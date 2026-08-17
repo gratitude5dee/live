@@ -510,23 +510,64 @@ function StagePage() {
     await logPromptEvent("clear", "gesture", null);
   }, [applied, logPromptEvent, syncOutboundSource]);
 
-  // Preset ref images live at public URLs — send Lucy the URL directly
-  // (~100 bytes over the WS) instead of round-tripping through FileReader
-  // for a 200-400KB base64 payload on every apply.
-  const loadPresetRef = useCallback((url: string) => {
-    return { url, path: url } as { url: string; path: string };
+  // Preset ref images live at site-relative CDN paths (/__l5e/assets-v1/...).
+  // Lucy runs on fal's servers and cannot resolve a relative path, so we mirror
+  // the asset into the `refs` bucket once and hand Lucy a signed absolute URL —
+  // the exact same path user uploads take. Resolved URLs are cached in memory.
+  const presetRefCache = useRef<Map<string, { url?: string; dataUri?: string; path?: string }>>(
+    new Map(),
+  );
+
+  const loadPresetRef = useCallback(async (src: string) => {
+    const cached = presetRefCache.current.get(src);
+    if (cached) return cached;
+
+    let resolved: { url?: string; dataUri?: string; path?: string };
+    try {
+      const abs = src.startsWith("http") ? src : new URL(src, window.location.origin).toString();
+      const blob = await (await fetch(abs)).blob();
+      // Deterministic key from the asset path so repeat sessions reuse the object.
+      const key = `presets/${src.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+      const { error: uErr } = await supabase.storage
+        .from("refs")
+        .upload(key, blob, { upsert: true, contentType: blob.type || "image/webp" });
+      const { data: signed } = await supabase.storage.from("refs").createSignedUrl(key, 3600);
+      if (signed?.signedUrl) {
+        resolved = { url: signed.signedUrl, path: key };
+      } else {
+        if (uErr) console.warn("preset ref upload failed", uErr);
+        const dataUri = await new Promise<string>((res, rej) => {
+          const r = new FileReader();
+          r.onload = () => res(r.result as string);
+          r.onerror = rej;
+          r.readAsDataURL(blob);
+        });
+        resolved = { dataUri };
+      }
+    } catch (e) {
+      console.warn("preset ref resolve failed", e);
+      resolved = {};
+    }
+    presetRefCache.current.set(src, resolved);
+    return resolved;
   }, []);
 
   const applyPreset = useCallback(
     async (preset: Preset, source: "preset" | "gesture" | "remote" = "preset") => {
       let ref: { dataUri?: string; url?: string; path?: string } | null = refImage;
       if (preset.ref_image_url) {
-        ref = loadPresetRef(preset.ref_image_url);
+        const resolved = await loadPresetRef(preset.ref_image_url);
+        if (!resolved.url && !resolved.dataUri) {
+          toast.error(`${preset.name}: reference image failed to load`);
+          return;
+        }
+        ref = resolved;
         setRefImage(ref);
       } else if (preset.requires_ref && !refImage) {
         toast.error(`${preset.name} needs a reference image`);
         return;
       }
+
       currentPresetIndex.current = presets.findIndex((p) => p.id === preset.id);
       activePresetKindRef.current =
         preset.template_key === "character_swap"
